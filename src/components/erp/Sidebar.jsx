@@ -14,6 +14,9 @@ import {
   Settings,
   ChevronRight,
   Zap,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -22,100 +25,105 @@ const navItems = [
   {
     label: "Principal",
     items: [
-      {
-        href: "/",
-        label: "Dashboard",
-        icon: LayoutDashboard,
-        badge: null,
-      },
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, badge: null },
     ],
   },
   {
     label: "Operaciones",
     items: [
-      {
-        href: "/inventario",
-        label: "Inventario",
-        icon: Package,
-        badge: "12",
-        badgeVariant: "destructive",
-      },
-      {
-        href: "/ventas",
-        label: "Ventas",
-        icon: TrendingUp,
-        badge: "3",
-        badgeVariant: "default",
-      },
-      {
-        href: "/compras",
-        label: "Compras",
-        icon: ShoppingCart,
-        badge: null,
-      },
+      { href: "/inventario", label: "Inventario", icon: Package, badge: "12", badgeVariant: "destructive" },
+      { href: "/ventas", label: "Ventas", icon: TrendingUp, badge: "3", badgeVariant: "default" },
+      { href: "/compras", label: "Compras", icon: ShoppingCart, badge: null },
     ],
   },
   {
     label: "Gestión",
     items: [
-      {
-        href: "/rrhh",
-        label: "RRHH",
-        icon: Users,
-        badge: null,
-      },
-      {
-        href: "/contabilidad",
-        label: "Contabilidad",
-        icon: Calculator,
-        badge: null,
-      },
-      {
-        href: "/reportes",
-        label: "Reportes",
-        icon: BarChart3,
-        badge: null,
-      },
+      { href: "/rrhh", label: "RRHH", icon: Users, badge: null },
+      { href: "/contabilidad", label: "Contabilidad", icon: Calculator, badge: null },
+      { href: "/reportes", label: "Reportes", icon: BarChart3, badge: null },
     ],
   },
   {
     label: "Sistema",
     items: [
-      {
-        href: "/configuracion",
-        label: "Configuración",
-        icon: Settings,
-        badge: null,
-      },
+      { href: "/configuracion", label: "Configuración", icon: Settings, badge: null },
     ],
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-sidebar flex flex-col">
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-border">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
+    <aside
+      className={cn(
+        // Positioning & size
+        "fixed inset-y-0 left-0 z-30 flex flex-col",
+        "bg-sidebar border-r border-border",
+        "transition-all duration-300 ease-in-out",
+
+        // ── Mobile: full-width drawer, slides in/out ──────────────────────
+        // Always w-72 on mobile, translate to show/hide
+        "w-72",
+        !mobileOpen && "-translate-x-full",
+        mobileOpen && "translate-x-0 shadow-2xl",
+
+        // ── Desktop (lg+): fixed in place, no translate, width toggles ────
+        "lg:translate-x-0",
+        collapsed ? "lg:w-16" : "lg:w-64",
+      )}
+    >
+      {/* ── Logo header ─────────────────────────────────────────────────── */}
+      <div className={cn(
+        "flex shrink-0 items-center border-b border-border",
+        collapsed ? "lg:flex-col lg:gap-2 lg:py-4 lg:px-2 flex-row gap-3 py-4 px-4"
+                  : "flex-row gap-3 py-4 px-4"
+      )}>
+        {/* Logo icon */}
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary">
           <Zap className="h-5 w-5 text-primary-foreground" />
         </div>
-        <div>
-          <p className="text-sm font-bold text-sidebar-foreground leading-none">
-            NexERP
-          </p>
+
+        {/* Brand text */}
+        <div className={cn("flex-1 min-w-0", collapsed && "lg:hidden")}>
+          <p className="text-sm font-bold text-sidebar-foreground leading-none">NexERP</p>
           <p className="text-xs text-muted-foreground mt-0.5">Enterprise v1.0</p>
         </div>
+
+        {/* Mobile: X close button */}
+        <button
+          onClick={onMobileClose}
+          className="lg:hidden flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        {/* Desktop: collapse toggle */}
+        <button
+          onClick={onToggle}
+          className="hidden lg:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          title={collapsed ? "Expandir" : "Colapsar"}
+        >
+          {collapsed
+            ? <PanelLeftOpen className="h-4 w-4" />
+            : <PanelLeftClose className="h-4 w-4" />
+          }
+        </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3">
+      {/* ── Navigation ──────────────────────────────────────────────────── */}
+      <nav className="flex-1 overflow-y-auto py-4 px-2">
         {navItems.map((group, groupIndex) => (
           <div key={groupIndex} className="mb-4">
-            <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+            {/* Group label */}
+            <p className={cn(
+              "px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60",
+              collapsed && "lg:hidden"
+            )}>
               {group.label}
             </p>
+
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 const isActive = pathname === item.href;
@@ -124,58 +132,61 @@ export default function Sidebar() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      onClick={onMobileClose}
+                      title={collapsed ? item.label : undefined}
                       className={cn(
                         "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                        collapsed && "lg:justify-center lg:px-0",
                         isActive
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                       )}
                     >
-                      <Icon
-                        className={cn(
-                          "h-4 w-4 shrink-0",
-                          isActive
-                            ? "text-primary-foreground"
-                            : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
-                        )}
-                      />
-                      <span className="flex-1">{item.label}</span>
+                      <Icon className={cn(
+                        "h-4 w-4 shrink-0",
+                        isActive
+                          ? "text-primary-foreground"
+                          : "text-muted-foreground group-hover:text-sidebar-accent-foreground"
+                      )} />
+
+                      <span className={cn("flex-1 whitespace-nowrap", collapsed && "lg:hidden")}>
+                        {item.label}
+                      </span>
+
                       {item.badge && (
                         <Badge
                           variant={item.badgeVariant || "secondary"}
-                          className="h-5 px-1.5 text-xs"
+                          className={cn("h-5 px-1.5 text-xs shrink-0", collapsed && "lg:hidden")}
                         >
                           {item.badge}
                         </Badge>
                       )}
+
                       {isActive && (
-                        <ChevronRight className="h-3 w-3 opacity-60" />
+                        <ChevronRight className={cn("h-3 w-3 opacity-60", collapsed && "lg:hidden")} />
                       )}
                     </Link>
                   </li>
                 );
               })}
             </ul>
+
             {groupIndex < navItems.length - 1 && (
-              <Separator className="mt-4 opacity-50" />
+              <Separator className={cn("mt-4 opacity-50", collapsed && "lg:hidden")} />
             )}
           </div>
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-border p-4">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <div className="shrink-0 border-t border-border p-3">
+        <div className={cn("flex items-center gap-3", collapsed && "lg:justify-center")}>
+          <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
             <span className="text-xs font-bold text-white">AD</span>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-sidebar-foreground truncate">
-              Admin User
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              admin@empresa.com
-            </p>
+          <div className={cn("flex-1 min-w-0", collapsed && "lg:hidden")}>
+            <p className="text-xs font-medium text-sidebar-foreground truncate">Admin User</p>
+            <p className="text-xs text-muted-foreground truncate">admin@empresa.com</p>
           </div>
         </div>
       </div>
