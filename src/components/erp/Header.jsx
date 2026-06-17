@@ -10,6 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 
@@ -53,9 +54,6 @@ export default function Header({ title = "Dashboard", onMenuClick }) {
           placeholder="Buscar en el sistema..."
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
-        <kbd className="hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-background px-1.5 text-xs text-muted-foreground">
-          ⌘K
-        </kbd>
       </div>
 
       {/* Actions */}
@@ -79,22 +77,22 @@ export default function Header({ title = "Dashboard", onMenuClick }) {
 
         {/* User menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 hover:bg-muted transition-colors">
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs font-bold">
-                  AD
-                </AvatarFallback>
-              </Avatar>
-              <span className="hidden md:block text-sm font-medium">Admin</span>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
+          <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20">
+            <Avatar className="h-7 w-7">
+              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs font-bold">
+                AD
+              </AvatarFallback>
+            </Avatar>
+            <span className="hidden md:block text-sm font-medium">Admin</span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Perfil</DropdownMenuItem>
-            <DropdownMenuItem>Configuración</DropdownMenuItem>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>Perfil</DropdownMenuItem>
+              <DropdownMenuItem>Configuración</DropdownMenuItem>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive">Cerrar Sesión</DropdownMenuItem>
           </DropdownMenuContent>

@@ -241,7 +241,7 @@ export default function LoginPage() {
           </p>
 
           <p className="mt-6 text-center text-[11px] text-muted-foreground/50">
-            © 2026 NexERP. Todos los derechos reservados.
+            © {new Date().getFullYear()} NexERP. Todos los derechos reservados.
           </p>
         </div>
       </div>
