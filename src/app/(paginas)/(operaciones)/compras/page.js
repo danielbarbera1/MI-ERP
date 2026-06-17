@@ -9,6 +9,25 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { useState, useMemo } from "react";
+import {
   ShoppingCart,
   Clock,
   DollarSign,
@@ -138,6 +157,59 @@ const statusConfig = {
 };
 
 export default function ComprasPage() {
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [selectedPurchase, setSelectedPurchase] = useState(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+
+  const handleOpenView = (purchase) => {
+    setSelectedPurchase(purchase);
+    setIsViewOpen(true);
+  };
+
+  const handleOpenEdit = (purchase) => {
+    setSelectedPurchase(purchase);
+    setIsEditOpen(true);
+  };
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("date-desc");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const filteredAndSortedData = useMemo(() => {
+    let data = [...purchasesData];
+
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      data = data.filter(
+        (purchase) =>
+          purchase.supplier.toLowerCase().includes(lowerSearch) ||
+          purchase.id.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    if (filterStatus !== "all") {
+      data = data.filter((purchase) => purchase.status === filterStatus);
+    }
+
+    data.sort((a, b) => {
+      if (sortBy === "date-desc") return new Date(b.date) - new Date(a.date);
+      if (sortBy === "date-asc") return new Date(a.date) - new Date(b.date);
+      
+      const amountA = parseFloat(a.amount.replace(/[^0-9.-]+/g,""));
+      const amountB = parseFloat(b.amount.replace(/[^0-9.-]+/g,""));
+      if (sortBy === "amount-desc") return amountB - amountA;
+      if (sortBy === "amount-asc") return amountA - amountB;
+
+      if (sortBy === "name-asc") return a.supplier.localeCompare(b.supplier);
+      if (sortBy === "name-desc") return b.supplier.localeCompare(a.supplier);
+
+      return 0;
+    });
+
+    return data;
+  }, [searchTerm, sortBy, filterStatus]);
+
   return (
     <ERPLayout title="Compras">
       <div className="flex flex-col gap-6">
@@ -153,7 +225,10 @@ export default function ComprasPage() {
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Exportar</span>
             </button>
-            <button className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+            <button 
+              className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background"
+              onClick={() => setIsAddOpen(true)}
+            >
               <Plus className="h-4 w-4" />
               Nueva Orden
             </button>
@@ -198,14 +273,39 @@ export default function ComprasPage() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <input
                     type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Buscar orden o proveedor..."
                     className="w-full rounded-md border border-border bg-background pl-9 pr-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                   />
                 </div>
-                <button className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors">
-                  <Filter className="h-4 w-4" />
-                  <span className="hidden sm:inline">Filtrar</span>
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-1 focus:ring-primary">
+                      <Filter className="h-4 w-4" />
+                      <span className="hidden sm:inline">Filtrar</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuRadioGroup value={sortBy} onValueChange={setSortBy}>
+                      <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
+                      <DropdownMenuRadioItem value="date-desc">Más recientes primero</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="date-asc">Más antiguas primero</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="amount-desc">Mayor a menor monto</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="amount-asc">Menor a mayor monto</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="name-asc">Proveedor (A-Z)</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuRadioGroup value={filterStatus} onValueChange={setFilterStatus}>
+                      <DropdownMenuLabel>Filtrar por Estado</DropdownMenuLabel>
+                      <DropdownMenuRadioItem value="all">Todos los estados</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="completado">Recibido</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="en_camino">En Camino</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="pendiente">Pendiente</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="retrasado">Retrasado</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </CardHeader>
@@ -223,7 +323,7 @@ export default function ComprasPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {purchasesData.map((purchase) => {
+                {filteredAndSortedData.map((purchase) => {
                   const status = statusConfig[purchase.status];
                   return (
                     <tr key={purchase.id} className="hover:bg-muted/30 transition-colors">
@@ -243,9 +343,19 @@ export default function ComprasPage() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors outline-none focus:ring-1 focus:ring-primary">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleOpenView(purchase)}>Ver detalles</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenEdit(purchase)}>Editar orden</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-red-600 focus:text-red-600 focus:bg-red-50">Eliminar</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
@@ -255,6 +365,150 @@ export default function ComprasPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nueva Orden de Compra</DialogTitle>
+            <DialogDescription>
+              Crea una nueva orden para un proveedor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Proveedor</label>
+              <input type="text" placeholder="Ej. Proveedora ABC" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Monto Total</label>
+              <input type="text" placeholder="Ej. $5,000.00" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Fecha Estimada</label>
+                <input type="date" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Estado</label>
+                <select className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                  <option>Borrador</option>
+                  <option>Enviada</option>
+                  <option>En tránsito</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
+              Cancelar
+            </button>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsAddOpen(false)}>
+              Crear Orden
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Ver Detalles */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalles de Orden de Compra</DialogTitle>
+            <DialogDescription>
+              Información completa de la orden seleccionada.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPurchase && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">ID Orden</h4>
+                  <p className="text-sm font-medium">{selectedPurchase.id}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Estado</h4>
+                  <Badge variant="outline" className={`mt-1 text-xs ${statusConfig[selectedPurchase.status]?.className}`}>
+                    {statusConfig[selectedPurchase.status]?.label}
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Proveedor</h4>
+                  <p className="text-sm font-medium">{selectedPurchase.supplier}</p>
+                  <p className="text-xs text-muted-foreground">{selectedPurchase.email}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Monto Total</h4>
+                  <p className="text-sm font-medium">{selectedPurchase.amount}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Fecha Emisión</h4>
+                  <p className="text-sm font-medium">{selectedPurchase.date}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Entrega Estimada</h4>
+                  <p className="text-sm font-medium">{selectedPurchase.expectedDate}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsViewOpen(false)}>
+              Cerrar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Editar Orden */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Orden de Compra</DialogTitle>
+            <DialogDescription>
+              Modifica la información de esta orden de compra.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPurchase && (
+            <div className="grid gap-4 py-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Proveedor</label>
+                <input type="text" defaultValue={selectedPurchase.supplier} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Monto Total</label>
+                <input type="text" defaultValue={selectedPurchase.amount} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Fecha Estimada</label>
+                  <input type="date" defaultValue={selectedPurchase.expectedDate} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Estado</label>
+                  <select defaultValue={selectedPurchase.status} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                    <option value="completado">Recibido</option>
+                    <option value="en_camino">En Camino</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="retrasado">Retrasado</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
+              Cancelar
+            </button>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsEditOpen(false)}>
+              Guardar Cambios
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ERPLayout>
   );
 }

@@ -9,6 +9,26 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuGroup,
+} from "@/components/ui/dropdown-menu";
+import { useState, useMemo } from "react";
+import {
   Package,
   AlertTriangle,
   DollarSign,
@@ -20,6 +40,9 @@ import {
   Filter,
   Download,
   Search,
+  Edit,
+  Eye,
+  Trash,
 } from "lucide-react";
 
 // Mock Data
@@ -143,6 +166,59 @@ const statusConfig = {
 };
 
 export default function InventarioPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("stock-desc");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+
+  const handleOpenView = (product) => {
+    setSelectedProduct(product);
+    setIsViewOpen(true);
+  };
+
+  const handleOpenEdit = (product) => {
+    setSelectedProduct(product);
+    setIsEditOpen(true);
+  };
+
+  const filteredAndSortedData = useMemo(() => {
+    let data = [...inventoryData];
+
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      data = data.filter(
+        (item) =>
+          item.name.toLowerCase().includes(lowerSearch) ||
+          item.id.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    if (filterStatus !== "all") {
+      data = data.filter((item) => item.status === filterStatus);
+    }
+
+    data.sort((a, b) => {
+      if (sortBy === "stock-desc") return b.stock - a.stock;
+      if (sortBy === "stock-asc") return a.stock - b.stock;
+      
+      const priceA = parseFloat(a.price.replace(/[^0-9.-]+/g,""));
+      const priceB = parseFloat(b.price.replace(/[^0-9.-]+/g,""));
+      if (sortBy === "price-desc") return priceB - priceA;
+      if (sortBy === "price-asc") return priceA - priceB;
+
+      if (sortBy === "name-asc") return a.name.localeCompare(b.name);
+      if (sortBy === "name-desc") return b.name.localeCompare(a.name);
+
+      return 0;
+    });
+
+    return data;
+  }, [searchTerm, sortBy, filterStatus]);
+
   return (
     <ERPLayout title="Inventario">
       <div className="flex flex-col gap-6">
@@ -158,7 +234,10 @@ export default function InventarioPage() {
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Exportar</span>
             </button>
-            <button className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+            <button 
+              className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background"
+              onClick={() => setIsAddOpen(true)}
+            >
               <Plus className="h-4 w-4" />
               Nuevo Producto
             </button>
@@ -211,14 +290,38 @@ export default function InventarioPage() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <input
                     type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Buscar por SKU o nombre..."
                     className="w-full rounded-md border border-border bg-background pl-9 pr-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                   />
                 </div>
-                <button className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors">
-                  <Filter className="h-4 w-4" />
-                  <span className="hidden sm:inline">Filtros</span>
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-1 focus:ring-primary">
+                      <Filter className="h-4 w-4" />
+                      <span className="hidden sm:inline">Filtros</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuRadioGroup value={sortBy} onValueChange={setSortBy}>
+                      <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
+                      <DropdownMenuRadioItem value="stock-desc">Mayor a menor stock</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="stock-asc">Menor a mayor stock</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="price-desc">Mayor a menor precio</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="price-asc">Menor a mayor precio</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="name-asc">Nombre (A-Z)</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuRadioGroup value={filterStatus} onValueChange={setFilterStatus}>
+                      <DropdownMenuLabel>Filtrar por Estado</DropdownMenuLabel>
+                      <DropdownMenuRadioItem value="all">Todos los estados</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="optimo">Óptimo</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="bajo">Stock Bajo</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="agotado">Agotado</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </CardHeader>
@@ -235,7 +338,7 @@ export default function InventarioPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {inventoryData.map((item) => {
+                {filteredAndSortedData.map((item) => {
                   const status = statusConfig[item.status];
                   return (
                     <tr key={item.id} className="hover:bg-muted/30 transition-colors">
@@ -259,9 +362,30 @@ export default function InventarioPage() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors outline-none focus:ring-2 focus:ring-primary/20">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuGroup>
+                              <DropdownMenuItem onClick={() => handleOpenView(item)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                <span>Ver detalles</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleOpenEdit(item)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                <span>Editar</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive">
+                              <Trash className="mr-2 h-4 w-4" />
+                              <span>Eliminar</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
@@ -271,6 +395,130 @@ export default function InventarioPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalles del Producto</DialogTitle>
+            <DialogDescription>
+              Información detallada del producto seleccionado.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedProduct && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">Nombre:</span>
+                <span className="col-span-3 text-sm font-medium">{selectedProduct.name}</span>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">SKU:</span>
+                <span className="col-span-3 text-sm font-mono text-muted-foreground">{selectedProduct.id}</span>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">Categoría:</span>
+                <span className="col-span-3 text-sm">{selectedProduct.category}</span>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">Stock:</span>
+                <span className="col-span-3 text-sm">{selectedProduct.stock} unid. <span className="text-muted-foreground">(Mínimo: {selectedProduct.minStock})</span></span>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">Precio:</span>
+                <span className="col-span-3 text-sm font-medium text-emerald-600 dark:text-emerald-400">{selectedProduct.price}</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsViewOpen(false)}>
+              Cerrar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Producto</DialogTitle>
+            <DialogDescription>
+              Actualiza la información del producto.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedProduct && (
+            <div className="grid gap-4 py-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Nombre</label>
+                <input type="text" defaultValue={selectedProduct.name} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Precio</label>
+                <input type="text" defaultValue={selectedProduct.price} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Stock Actual</label>
+                  <input type="number" defaultValue={selectedProduct.stock} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Stock Mínimo</label>
+                  <input type="number" defaultValue={selectedProduct.minStock} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
+              Cancelar
+            </button>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsEditOpen(false)}>
+              Guardar Cambios
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuevo Producto</DialogTitle>
+            <DialogDescription>
+              Añade un nuevo producto al inventario.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Nombre</label>
+              <input type="text" placeholder="Ej. Teclado Mecánico" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Categoría</label>
+              <input type="text" placeholder="Ej. Accesorios" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Precio</label>
+              <input type="text" placeholder="Ej. $120.00" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Stock Inicial</label>
+                <input type="number" placeholder="0" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Stock Mínimo</label>
+                <input type="number" placeholder="5" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
+              Cancelar
+            </button>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsAddOpen(false)}>
+              Crear Producto
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ERPLayout>
   );
 }

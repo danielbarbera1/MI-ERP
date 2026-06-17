@@ -9,6 +9,25 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { useState, useMemo } from "react";
+import {
   Users,
   UserPlus,
   CalendarDays,
@@ -147,6 +166,54 @@ const statusConfig = {
 };
 
 export default function RRHHPage() {
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+
+  const handleOpenView = (employee) => {
+    setSelectedEmployee(employee);
+    setIsViewOpen(true);
+  };
+
+  const handleOpenEdit = (employee) => {
+    setSelectedEmployee(employee);
+    setIsEditOpen(true);
+  };
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const filteredAndSortedData = useMemo(() => {
+    let data = [...employeeData];
+
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      data = data.filter(
+        (employee) =>
+          employee.name.toLowerCase().includes(lowerSearch) ||
+          employee.id.toLowerCase().includes(lowerSearch) ||
+          employee.role.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    if (filterStatus !== "all") {
+      data = data.filter((employee) => employee.status === filterStatus);
+    }
+
+    data.sort((a, b) => {
+      if (sortBy === "name-asc") return a.name.localeCompare(b.name);
+      if (sortBy === "name-desc") return b.name.localeCompare(a.name);
+      if (sortBy === "date-desc") return new Date(b.hireDate) - new Date(a.hireDate);
+      if (sortBy === "date-asc") return new Date(a.hireDate) - new Date(b.hireDate);
+
+      return 0;
+    });
+
+    return data;
+  }, [searchTerm, sortBy, filterStatus]);
+
   return (
     <ERPLayout title="Recursos Humanos">
       <div className="flex flex-col gap-6">
@@ -162,7 +229,10 @@ export default function RRHHPage() {
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Exportar</span>
             </button>
-            <button className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+            <button 
+              className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background"
+              onClick={() => setIsAddOpen(true)}
+            >
               <Plus className="h-4 w-4" />
               Nuevo Empleado
             </button>
@@ -207,14 +277,37 @@ export default function RRHHPage() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <input
                     type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Buscar por nombre o ID..."
                     className="w-full rounded-md border border-border bg-background pl-9 pr-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                   />
                 </div>
-                <button className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors">
-                  <Filter className="h-4 w-4" />
-                  <span className="hidden sm:inline">Filtrar</span>
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-1 focus:ring-primary">
+                      <Filter className="h-4 w-4" />
+                      <span className="hidden sm:inline">Filtrar</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuRadioGroup value={sortBy} onValueChange={setSortBy}>
+                      <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
+                      <DropdownMenuRadioItem value="name-asc">Nombre (A-Z)</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="name-desc">Nombre (Z-A)</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="date-desc">Más recientes primero</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="date-asc">Más antiguos primero</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuRadioGroup value={filterStatus} onValueChange={setFilterStatus}>
+                      <DropdownMenuLabel>Filtrar por Estado</DropdownMenuLabel>
+                      <DropdownMenuRadioItem value="all">Todos los estados</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="activo">Activo</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="vacaciones">Vacaciones</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="licencia">Licencia</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </CardHeader>
@@ -232,7 +325,7 @@ export default function RRHHPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {employeeData.map((employee) => {
+                {filteredAndSortedData.map((employee) => {
                   const status = statusConfig[employee.status];
                   return (
                     <tr key={employee.id} className="hover:bg-muted/30 transition-colors">
@@ -252,9 +345,18 @@ export default function RRHHPage() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors outline-none focus:ring-1 focus:ring-primary">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleOpenView(employee)}>Ver detalles</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenEdit(employee)}>Editar empleado</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600 focus:text-red-600 focus:bg-red-50">Dar de baja</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
@@ -264,6 +366,163 @@ export default function RRHHPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuevo Empleado</DialogTitle>
+            <DialogDescription>
+              Añade un nuevo miembro al equipo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Nombre Completo</label>
+              <input type="text" placeholder="Ej. Ana Martínez" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Correo Electrónico</label>
+              <input type="email" placeholder="Ej. ana@empresa.com" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Cargo</label>
+                <input type="text" placeholder="Ej. Desarrollador" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Departamento</label>
+                <select className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                  <option>Tecnología</option>
+                  <option>Ventas</option>
+                  <option>Recursos Humanos</option>
+                  <option>Operaciones</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
+              Cancelar
+            </button>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsAddOpen(false)}>
+              Crear Empleado
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Ver Detalles */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalles del Empleado</DialogTitle>
+            <DialogDescription>
+              Información completa del empleado seleccionado.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedEmployee && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">ID Empleado</h4>
+                  <p className="text-sm font-medium">{selectedEmployee.id}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Estado</h4>
+                  <Badge variant="outline" className={`mt-1 text-xs ${statusConfig[selectedEmployee.status]?.className}`}>
+                    {statusConfig[selectedEmployee.status]?.label}
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Nombre Completo</h4>
+                  <p className="text-sm font-medium">{selectedEmployee.name}</p>
+                  <p className="text-xs text-muted-foreground">{selectedEmployee.email}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Fecha de Ingreso</h4>
+                  <p className="text-sm font-medium">{selectedEmployee.hireDate}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Cargo</h4>
+                  <p className="text-sm font-medium">{selectedEmployee.role}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground">Departamento</h4>
+                  <p className="text-sm font-medium">{selectedEmployee.department}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsViewOpen(false)}>
+              Cerrar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Editar Empleado */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Empleado</DialogTitle>
+            <DialogDescription>
+              Modifica la información de este empleado.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedEmployee && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Nombre Completo</label>
+                  <input type="text" defaultValue={selectedEmployee.name} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Correo Electrónico</label>
+                  <input type="email" defaultValue={selectedEmployee.email} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Cargo</label>
+                  <input type="text" defaultValue={selectedEmployee.role} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Departamento</label>
+                  <select defaultValue={selectedEmployee.department} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                    <option value="Ventas">Ventas</option>
+                    <option value="IT">IT</option>
+                    <option value="Finanzas">Finanzas</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Atención al Cliente">Atención al Cliente</option>
+                    <option value="RRHH">RRHH</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Estado</label>
+                <select defaultValue={selectedEmployee.status} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                  <option value="activo">Activo</option>
+                  <option value="vacaciones">Vacaciones</option>
+                  <option value="licencia">Licencia Médica</option>
+                </select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
+              Cancelar
+            </button>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsEditOpen(false)}>
+              Guardar Cambios
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ERPLayout>
   );
 }

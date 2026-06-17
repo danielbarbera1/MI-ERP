@@ -9,6 +9,37 @@ backend se va conectar a una base de datos que se va crear en supabase
 el backend lo tengo que hacer sin IA ya que es una tarea importante
 
 
+entrega del proyecto sabado 20/06/2026
+
+se empezo el domingo 14/06/2026
+-se instalo next , tailwind css y supabase (listo)
+-se armo una maqueta para mostrar como se veria un ERP (listo)
+
+lunes 15/06/2026
+-se corrigio el diseño de la maqueta (listo)
+-se armo las paginas para el ERP (listo)
+
+martes 16/06/2026
+-se hicieron funcionabilidades de filtros , editar , eliminar , ver detalle etc 
+-lenvantamiento de la informacion de los procesos que tiene que tener el ERP
+
+miercoles 17/06/2026
+-conectividad con la base de datos , crearla las tablas, llenarlas de informacion 
+-crear el login ,verificar que funcione correctamente 
+
+jueves 18/06/2026
+asignar los roles de usuario que me pidio mi profesor (definir los roles de usuario que puede ver cada usuario, rutas , permisos , etc)
+
+viernes 19/06/2026
+-recorrer cada seccion que tiene que tener el ERP y verificar que se pueda hacer todas las funciones
+-corregir los errores que encuentre
+-hacer las mejoras que se me ocurran 
+
+sabado 20/06/2026
+-entregar del proyecto y defenderlo  
+
+
+
 informacion 
 ![alt text](image.png) (base de datos)
 
