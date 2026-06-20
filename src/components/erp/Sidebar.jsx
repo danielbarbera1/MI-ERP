@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -25,7 +27,7 @@ const navItems = [
   {
     label: "Principal",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard, badge: null },
+      { href: "dashboard", label: "Dashboard", icon: LayoutDashboard, badge: null },
     ],
   },
   {
@@ -54,6 +56,22 @@ const navItems = [
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
   const pathname = usePathname();
+  const [userEmail, setUserEmail] = useState("Cargando...");
+  const [userInitials, setUserInitials] = useState("--");
+  const [userName, setUserName] = useState("Cargando...");
+
+  useEffect(() => {
+    const supabase = createClient();
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email);
+        setUserName(user.email.split('@')[0]);
+        setUserInitials(user.email.substring(0, 2).toUpperCase());
+      }
+    };
+    fetchUser();
+  }, []);
 
   return (
     <aside
@@ -182,11 +200,11 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
       <div className="shrink-0 border-t border-border p-3">
         <div className={cn("flex items-center gap-3", collapsed && "lg:justify-center")}>
           <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <span className="text-xs font-bold text-white">AD</span>
+            <span className="text-xs font-bold text-white">{userInitials}</span>
           </div>
           <div className={cn("flex-1 min-w-0", collapsed && "lg:hidden")}>
-            <p className="text-xs font-medium text-sidebar-foreground truncate">Admin User</p>
-            <p className="text-xs text-muted-foreground truncate">admin@empresa.com</p>
+            <p className="text-xs font-medium text-sidebar-foreground truncate">{userName}</p>
+            <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
           </div>
         </div>
       </div>

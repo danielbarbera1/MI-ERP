@@ -12,14 +12,37 @@ import {
   DropdownMenuTrigger,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export default function Header({ title = "Dashboard", onMenuClick }) {
   const [darkMode, setDarkMode] = useState(false);
+  const [userEmail, setUserEmail] = useState("Cargando...");
+  const [userInitials, setUserInitials] = useState("--");
+  const router = useRouter();
+
+  useEffect(() => {
+    const supabase = createClient();
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email);
+        setUserInitials(user.email.substring(0, 2).toUpperCase());
+      }
+    };
+    fetchUser();
+  }, []);
 
   const toggleDark = () => {
     setDarkMode(!darkMode);
     document.documentElement.classList.toggle("dark");
+  };
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
   };
 
   return (
@@ -80,10 +103,10 @@ export default function Header({ title = "Dashboard", onMenuClick }) {
           <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20">
             <Avatar className="h-7 w-7">
               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs font-bold">
-                AD
+                {userInitials}
               </AvatarFallback>
             </Avatar>
-            <span className="hidden md:block text-sm font-medium">Admin</span>
+            <span className="hidden md:block text-sm font-medium">{userEmail.split('@')[0]}</span>
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
@@ -94,7 +117,7 @@ export default function Header({ title = "Dashboard", onMenuClick }) {
               <DropdownMenuItem>Configuración</DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Cerrar Sesión</DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive cursor-pointer" onClick={handleLogout}>Cerrar Sesión</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
