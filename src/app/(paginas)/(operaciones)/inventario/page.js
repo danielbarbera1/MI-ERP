@@ -27,7 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Package,
   AlertTriangle,
@@ -43,112 +43,11 @@ import {
   Edit,
   Eye,
   Trash,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
-// Mock Data
-const kpiData = [
-  {
-    id: "total-productos",
-    title: "Total Productos",
-    value: "1,432",
-    change: "+12",
-    trend: "up",
-    icon: Package,
-    description: "vs. mes anterior",
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-  },
-  {
-    id: "stock-bajo",
-    title: "Stock Bajo/Agotado",
-    value: "24",
-    change: "-5",
-    trend: "down",
-    icon: AlertTriangle,
-    description: "vs. mes anterior",
-    color: "text-orange-500",
-    bg: "bg-orange-500/10",
-  },
-  {
-    id: "valor-inventario",
-    title: "Valor del Inventario",
-    value: "$142,500",
-    change: "+5.2%",
-    trend: "up",
-    icon: DollarSign,
-    description: "vs. mes anterior",
-    color: "text-emerald-500",
-    bg: "bg-emerald-500/10",
-  },
-  {
-    id: "categorias",
-    title: "Categorías Activas",
-    value: "18",
-    change: "0",
-    trend: "neutral",
-    icon: Tags,
-    description: "Sin cambios",
-    color: "text-purple-500",
-    bg: "bg-purple-500/10",
-  },
-];
-
-const inventoryData = [
-  {
-    id: "SKU-1001",
-    name: "Laptop HP ProBook 450",
-    category: "Electrónica",
-    stock: 45,
-    minStock: 10,
-    price: "$850.00",
-    status: "optimo",
-  },
-  {
-    id: "SKU-1002",
-    name: "Monitor LG 27\" 4K",
-    category: "Electrónica",
-    stock: 5,
-    minStock: 8,
-    price: "$320.00",
-    status: "bajo",
-  },
-  {
-    id: "SKU-1003",
-    name: "Silla de Oficina Ergonómica",
-    category: "Mobiliario",
-    stock: 0,
-    minStock: 5,
-    price: "$150.00",
-    status: "agotado",
-  },
-  {
-    id: "SKU-1004",
-    name: "Teclado Mecánico RGB",
-    category: "Accesorios",
-    stock: 112,
-    minStock: 20,
-    price: "$65.00",
-    status: "optimo",
-  },
-  {
-    id: "SKU-1005",
-    name: "Auriculares Sony WH-1000",
-    category: "Audio",
-    stock: 2,
-    minStock: 10,
-    price: "$280.00",
-    status: "bajo",
-  },
-  {
-    id: "SKU-1006",
-    name: "Escritorio Elevable",
-    category: "Mobiliario",
-    stock: 15,
-    minStock: 5,
-    price: "$450.00",
-    status: "optimo",
-  },
-];
 
 const statusConfig = {
   optimo: {
@@ -166,6 +65,12 @@ const statusConfig = {
 };
 
 export default function InventarioPage() {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("stock-desc");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -174,6 +79,206 @@ export default function InventarioPage() {
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+
+  // --- Estados para Crear Producto ---
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newProductForm, setNewProductForm] = useState({
+    nombre_producto: "",
+    descripcion_detallada: "",
+    marca: "",
+    categoria: "",
+    precio_publico_usd: "",
+    costo_proveedor_usd: "",
+    stock_inicial: "0",
+    unidad_medida: "",
+    ubicacion_almacen: ""
+  });
+
+  const handleAddProduct = async () => {
+    if (!newProductForm.nombre_producto) {
+      alert("El nombre del producto es obligatorio");
+      return;
+    }
+    
+    setIsSubmitting(true);
+    const supabase = createClient();
+    
+    const { error } = await supabase.from('productos').insert([{
+      nombre_producto: newProductForm.nombre_producto,
+      descripcion_detallada: newProductForm.descripcion_detallada || null,
+      marca: newProductForm.marca || null,
+      categoria: newProductForm.categoria || null,
+      precio_publico_usd: parseFloat(newProductForm.precio_publico_usd) || 0,
+      costo_proveedor_usd: parseFloat(newProductForm.costo_proveedor_usd) || 0,
+      stock_inicial: parseInt(newProductForm.stock_inicial) || 0,
+      unidad_medida: newProductForm.unidad_medida || null,
+      ubicacion_almacen: newProductForm.ubicacion_almacen || null
+    }]);
+    
+    setIsSubmitting(false);
+
+    if (error) {
+      console.error("Error al crear producto:", error.message);
+      alert("Error al crear producto. Revisa la consola.");
+    } else {
+      setIsAddOpen(false);
+      setNewProductForm({ 
+        nombre_producto: "", 
+        descripcion_detallada: "", 
+        marca: "", 
+        categoria: "", 
+        precio_publico_usd: "", 
+        costo_proveedor_usd: "", 
+        stock_inicial: "0", 
+        unidad_medida: "", 
+        ubicacion_almacen: "" 
+      });
+      setRefreshTrigger(prev => prev + 1); // Forzamos recarga de la tabla y KPIs
+    }
+  };
+
+  // --- Estados para Paginación ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0); // Supabase te dará el total
+  const itemsPerPage = 10; // Cantidad de items por página
+
+  const [inventoryData, setInventoryData] = useState([]);
+  const [kpiData, setKpiData] = useState([
+    {
+      id: "total-productos",
+      title: "Total Productos",
+      value: "...",
+      change: "",
+      trend: "neutral",
+      icon: Package,
+      description: "Cargando...",
+      color: "text-blue-500",
+      bg: "bg-blue-500/10",
+    },
+    {
+      id: "stock-bajo",
+      title: "Stock Bajo/Agotado",
+      value: "...",
+      change: "",
+      trend: "neutral",
+      icon: AlertTriangle,
+      description: "Cargando...",
+      color: "text-orange-500",
+      bg: "bg-orange-500/10",
+    },
+    {
+      id: "valor-inventario",
+      title: "Valor del Inventario",
+      value: "...",
+      change: "",
+      trend: "neutral",
+      icon: DollarSign,
+      description: "Cargando...",
+      color: "text-emerald-500",
+      bg: "bg-emerald-500/10",
+    },
+    {
+      id: "categorias",
+      title: "Categorías Activas",
+      value: "...",
+      change: "",
+      trend: "neutral",
+      icon: Tags,
+      description: "Cargando...",
+      color: "text-purple-500",
+      bg: "bg-purple-500/10",
+    },
+  ]);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    const fetchInventario = async () => {
+      // 1. Calculamos el rango de registros (paginación)
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
+      // 2. Pedimos los datos y el contador total exacto a Supabase
+      const { data, count, error } = await supabase
+        .from('productos') // <-- REEMPLAZA ESTO CON EL NOMBRE REAL DE TU TABLA SI ES DISTINTO
+        .select('*', { count: 'exact' }) 
+        .range(from, to);
+
+      if (error) {
+        console.error("Error al traer datos de Supabase:", error.message);
+        return;
+      }
+
+      // 3. Actualizamos el total de items para que la botonera sepa cuántas páginas hay
+      if (count !== null) {
+        setTotalItems(count);
+      }
+
+      // 4. Formateamos los datos para que coincidan con la tabla
+      const productosFormateados = data.map((item) => {
+        let estadoActual = "optimo";
+        if (item.stock_inicial === 0) estadoActual = "agotado";
+        else if (item.stock_inicial <= 5) estadoActual = "bajo"; // Como no hay stock mínimo, usamos 5 por defecto
+
+        return {
+          id: item.id || "-", 
+          name: item.nombre_producto || "Sin nombre",
+          category: item.categoria || "General",
+          stock: item.stock_inicial || 0,
+          minStock: 5, // Asignado estático porque no hay columna stock_minimo
+          price: `$${parseFloat(item.precio_publico_usd || 0).toFixed(2)}`,
+          status: estadoActual, 
+        };
+      });
+
+      setInventoryData(productosFormateados);
+
+      // --- 5. CÁLCULO DE KPIs ---
+      // Para calcular KPIs reales (Valor total, Categorías), necesitamos consultar datos resumidos de TODA la tabla, no solo de esta página.
+      const { data: allData } = await supabase
+        .from('productos')
+        .select('stock_inicial, precio_publico_usd, categoria');
+
+      if (allData) {
+        // Cálculo 1: Total Productos (ya lo tenemos en count)
+        const totalProductos = count || allData.length;
+
+        // Cálculo 2: Stock Bajo/Agotado (stock <= 5)
+        const stockBajo = allData.filter(item => item.stock_inicial <= 5).length;
+
+        // Cálculo 3: Valor del Inventario (Suma de precio * stock)
+        const valorInventario = allData.reduce((acc, item) => {
+          return acc + ((item.precio_publico_usd || 0) * (item.stock_inicial || 0));
+        }, 0);
+
+        // Cálculo 4: Categorías Activas únicas
+        const categoriasUnicas = new Set(allData.map(item => item.categoria)).size;
+
+        // Actualizamos las tarjetas
+        setKpiData(prevKpi => {
+          const newKpi = [...prevKpi];
+          
+          newKpi[0].value = totalProductos.toString();
+          newKpi[0].description = "Registrados en BD";
+
+          newKpi[1].value = stockBajo.toString();
+          newKpi[1].description = "Productos críticos";
+
+          newKpi[2].value = `$${valorInventario.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          newKpi[2].description = "Valor total estimado";
+
+          newKpi[3].value = categoriasUnicas.toString();
+          newKpi[3].description = "Categorías distintas";
+
+          return newKpi;
+        });
+      }
+    };
+
+    fetchInventario();
+  }, [currentPage, refreshTrigger]);
+
 
   const handleOpenView = (product) => {
     setSelectedProduct(product);
@@ -204,9 +309,9 @@ export default function InventarioPage() {
     data.sort((a, b) => {
       if (sortBy === "stock-desc") return b.stock - a.stock;
       if (sortBy === "stock-asc") return a.stock - b.stock;
-      
-      const priceA = parseFloat(a.price.replace(/[^0-9.-]+/g,""));
-      const priceB = parseFloat(b.price.replace(/[^0-9.-]+/g,""));
+
+      const priceA = parseFloat(a.price.replace(/[^0-9.-]+/g, ""));
+      const priceB = parseFloat(b.price.replace(/[^0-9.-]+/g, ""));
       if (sortBy === "price-desc") return priceB - priceA;
       if (sortBy === "price-asc") return priceA - priceB;
 
@@ -217,12 +322,14 @@ export default function InventarioPage() {
     });
 
     return data;
-  }, [searchTerm, sortBy, filterStatus]);
+  }, [searchTerm, sortBy, filterStatus, inventoryData]);
+
+  if (!isMounted) return null;
 
   return (
     <ERPLayout title="Inventario">
       <div className="flex flex-col gap-6">
-        
+
         {/* Page Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -234,7 +341,7 @@ export default function InventarioPage() {
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Exportar</span>
             </button>
-            <button 
+            <button
               className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background"
               onClick={() => setIsAddOpen(true)}
             >
@@ -393,6 +500,32 @@ export default function InventarioPage() {
               </tbody>
             </table>
           </CardContent>
+
+          {/* Paginación */}
+          <div className="flex items-center justify-between border-t border-border px-6 py-4 bg-background rounded-b-xl">
+            <div className="text-sm text-muted-foreground">
+              Mostrando página <span className="font-medium text-foreground">{currentPage}</span> de <span className="font-medium text-foreground">{Math.max(1, Math.ceil(totalItems / itemsPerPage))}</span>
+              {" "}(Total: {totalItems} registros)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => p + 1)}
+                disabled={currentPage >= Math.ceil(totalItems / itemsPerPage) || totalItems === 0}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Siguiente
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </Card>
       </div>
 
@@ -485,27 +618,47 @@ export default function InventarioPage() {
               Añade un nuevo producto al inventario.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Nombre</label>
-              <input type="text" placeholder="Ej. Teclado Mecánico" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <label className="text-sm font-medium text-muted-foreground">Nombre del Producto *</label>
+              <input type="text" placeholder="Ej. Taladro Percutor 800W" value={newProductForm.nombre_producto} onChange={(e) => setNewProductForm({...newProductForm, nombre_producto: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Categoría</label>
-              <input type="text" placeholder="Ej. Accesorios" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Precio</label>
-              <input type="text" placeholder="Ej. $120.00" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <label className="text-sm font-medium text-muted-foreground">Descripción Detallada</label>
+              <textarea placeholder="Ej. Taladro de uso industrial con estuche..." value={newProductForm.descripcion_detallada} onChange={(e) => setNewProductForm({...newProductForm, descripcion_detallada: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all min-h-[80px]" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Stock Inicial</label>
-                <input type="number" placeholder="0" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                <label className="text-sm font-medium text-muted-foreground">Marca</label>
+                <input type="text" placeholder="Ej. Bosch" value={newProductForm.marca} onChange={(e) => setNewProductForm({...newProductForm, marca: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Stock Mínimo</label>
-                <input type="number" placeholder="5" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                <label className="text-sm font-medium text-muted-foreground">Categoría</label>
+                <input type="text" placeholder="Ej. Herramientas Eléctricas" value={newProductForm.categoria} onChange={(e) => setNewProductForm({...newProductForm, categoria: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Precio Público (USD)</label>
+                <input type="number" placeholder="Ej. 120.00" value={newProductForm.precio_publico_usd} onChange={(e) => setNewProductForm({...newProductForm, precio_publico_usd: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Costo Proveedor (USD)</label>
+                <input type="number" placeholder="Ej. 80.00" value={newProductForm.costo_proveedor_usd} onChange={(e) => setNewProductForm({...newProductForm, costo_proveedor_usd: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Stock Inicial</label>
+                <input type="number" placeholder="0" value={newProductForm.stock_inicial} onChange={(e) => setNewProductForm({...newProductForm, stock_inicial: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Und. Medida</label>
+                <input type="text" placeholder="Ej. Unidad, Caja" value={newProductForm.unidad_medida} onChange={(e) => setNewProductForm({...newProductForm, unidad_medida: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Ubicación</label>
+                <input type="text" placeholder="Ej. Estante B" value={newProductForm.ubicacion_almacen} onChange={(e) => setNewProductForm({...newProductForm, ubicacion_almacen: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
               </div>
             </div>
           </div>
@@ -513,8 +666,8 @@ export default function InventarioPage() {
             <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
               Cancelar
             </button>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsAddOpen(false)}>
-              Crear Producto
+            <button disabled={isSubmitting} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50" onClick={handleAddProduct}>
+              {isSubmitting ? "Creando..." : "Crear Producto"}
             </button>
           </DialogFooter>
         </DialogContent>
