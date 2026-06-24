@@ -599,42 +599,48 @@ export default function InventarioPage() {
             </DialogDescription>
           </DialogHeader>
           {selectedProduct && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Nombre:</span>
-                <span className="col-span-3 text-sm font-medium">{selectedProduct.name}</span>
+            <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-muted-foreground">Nombre del Producto</span>
+                <span className="text-sm font-medium">{selectedProduct.name}</span>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">SKU:</span>
-                <span className="col-span-3 text-sm font-mono text-muted-foreground">{selectedProduct.id}</span>
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-muted-foreground">Descripción Detallada</span>
+                <span className="text-sm">{selectedProduct.description}</span>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Categoría:</span>
-                <span className="col-span-3 text-sm">{selectedProduct.category}</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">Marca</span>
+                  <span className="text-sm">{selectedProduct.marca}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">Categoría</span>
+                  <span className="text-sm">{selectedProduct.category}</span>
+                </div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Marca:</span>
-                <span className="col-span-3 text-sm">{selectedProduct.marca}</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">Precio Público (USD)</span>
+                  <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{selectedProduct.price}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">Costo Proveedor (USD)</span>
+                  <span className="text-sm">{selectedProduct.cost}</span>
+                </div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Unidad de Medida:</span>
-                <span className="col-span-3 text-sm">{selectedProduct.unitOfMeasurement}</span>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Descripción:</span>
-                <span className="col-span-3 text-sm">{selectedProduct.description}</span>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Costo:</span>
-                <span className="col-span-3 text-sm">{selectedProduct.cost}</span>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Stock Actual:</span>
-                <span className="col-span-3 text-sm">{selectedProduct.stock} unid. <span className="text-muted-foreground">(Mínimo: {selectedProduct.minStock})</span></span>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Precio de Venta:</span>
-                <span className="col-span-3 text-sm font-medium text-emerald-600 dark:text-emerald-400">{selectedProduct.price}</span>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">Stock Actual</span>
+                  <span className="text-sm">{selectedProduct.stock} unid. <span className="text-xs text-muted-foreground">(Mín: {selectedProduct.minStock})</span></span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">Und. Medida</span>
+                  <span className="text-sm">{selectedProduct.unitOfMeasurement}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">SKU</span>
+                  <span className="text-sm font-mono text-muted-foreground">{selectedProduct.id}</span>
+                </div>
               </div>
             </div>
           )}
