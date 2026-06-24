@@ -70,14 +70,14 @@ export default function Header({ title = "Dashboard", onMenuClick }) {
       </div>
 
       {/* Search — hidden on small screens */}
-      <div className="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-2 w-64 xl:w-80">
+      {/* <div className="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-2 w-64 xl:w-80">
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
         <input
           type="text"
           placeholder="Buscar en el sistema..."
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
-      </div>
+      </div> */}
 
       {/* Actions */}
       <div className="flex items-center gap-1.5">
@@ -88,14 +88,6 @@ export default function Header({ title = "Dashboard", onMenuClick }) {
           aria-label="Toggle dark mode"
         >
           {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </button>
-
-        {/* Notifications */}
-        <button className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border hover:bg-muted transition-colors">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white">
-            5
-          </span>
         </button>
 
         {/* User menu */}
@@ -110,13 +102,6 @@ export default function Header({ title = "Dashboard", onMenuClick }) {
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>Perfil</DropdownMenuItem>
-              <DropdownMenuItem>Configuración</DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive cursor-pointer" onClick={handleLogout}>Cerrar Sesión</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -33,8 +33,8 @@ const navItems = [
   {
     label: "Operaciones",
     items: [
-      { href: "/inventario", label: "Inventario", icon: Package, badge: "12", badgeVariant: "destructive" },
-      { href: "/ventas", label: "Ventas", icon: TrendingUp, badge: "3", badgeVariant: "default" },
+      { href: "/inventario", label: "Inventario", icon: Package, badge: null },
+      { href: "/ventas", label: "Ventas", icon: TrendingUp, badge: null },
       { href: "/compras", label: "Compras", icon: ShoppingCart, badge: null },
     ],
   },

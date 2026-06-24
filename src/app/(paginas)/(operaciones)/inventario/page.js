@@ -72,6 +72,7 @@ export default function InventarioPage() {
   }, []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState("stock-desc");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -79,6 +80,20 @@ export default function InventarioPage() {
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+
+  // --- Estados para Editar Producto ---
+  const [editForm, setEditForm] = useState({
+    nombre_producto: "",
+    sku: "",
+    categoria: "",
+    marca: "",
+    unitOfMeasurement: "",
+    description: "",
+    cost: "",
+    stock: "",
+    price: "",
+  });
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
   // --- Estados para Crear Producto ---
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -191,6 +206,15 @@ export default function InventarioPage() {
     },
   ]);
 
+  // Debounce del searchTerm para no hacer una query por cada tecla
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1); // Resetear a página 1 en cada búsqueda nueva
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -199,11 +223,17 @@ export default function InventarioPage() {
       const from = (currentPage - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
 
-      // 2. Pedimos los datos y el contador total exacto a Supabase
-      const { data, count, error } = await supabase
-        .from('productos') // <-- REEMPLAZA ESTO CON EL NOMBRE REAL DE TU TABLA SI ES DISTINTO
-        .select('*', { count: 'exact' }) 
-        .range(from, to);
+      // 2. Construimos la query con filtro de búsqueda si existe
+      let query = supabase
+        .from('productos')
+        .select('*', { count: 'exact' });
+
+      // Aplicar filtro de búsqueda en Supabase
+      if (debouncedSearch.trim()) {
+        query = query.ilike('nombre_producto', `%${debouncedSearch.trim()}%`);
+      }
+
+      const { data, count, error } = await query.range(from, to);
 
       if (error) {
         console.error("Error al traer datos de Supabase:", error.message);
@@ -217,45 +247,41 @@ export default function InventarioPage() {
 
       // 4. Formateamos los datos para que coincidan con la tabla
       const productosFormateados = data.map((item) => {
+        const stockNum = parseInt(item.stock_inicial) || 0;
         let estadoActual = "optimo";
-        if (item.stock_inicial === 0) estadoActual = "agotado";
-        else if (item.stock_inicial <= 5) estadoActual = "bajo"; // Como no hay stock mínimo, usamos 5 por defecto
+        if (stockNum === 0) estadoActual = "agotado";
+        else if (stockNum <= 5) estadoActual = "bajo";
 
         return {
           id: item.id || "-", 
           name: item.nombre_producto || "Sin nombre",
           category: item.categoria || "General",
-          stock: item.stock_inicial || 0,
-          minStock: 5, // Asignado estático porque no hay columna stock_minimo
+          stock: stockNum,
+          minStock: 5,
           price: `$${parseFloat(item.precio_publico_usd || 0).toFixed(2)}`,
           status: estadoActual, 
+          marca: item.marca || "-",
+          unitOfMeasurement: item.unidad_medida || "-",
+          description: item.descripcion_detallada || "-",
+          cost: `$${parseFloat(item.costo_proveedor_usd || 0).toFixed(2)}`,
         };
       });
 
       setInventoryData(productosFormateados);
 
       // --- 5. CÁLCULO DE KPIs ---
-      // Para calcular KPIs reales (Valor total, Categorías), necesitamos consultar datos resumidos de TODA la tabla, no solo de esta página.
       const { data: allData } = await supabase
         .from('productos')
         .select('stock_inicial, precio_publico_usd, categoria');
 
       if (allData) {
-        // Cálculo 1: Total Productos (ya lo tenemos en count)
         const totalProductos = count || allData.length;
-
-        // Cálculo 2: Stock Bajo/Agotado (stock <= 5)
         const stockBajo = allData.filter(item => item.stock_inicial <= 5).length;
-
-        // Cálculo 3: Valor del Inventario (Suma de precio * stock)
         const valorInventario = allData.reduce((acc, item) => {
           return acc + ((item.precio_publico_usd || 0) * (item.stock_inicial || 0));
         }, 0);
-
-        // Cálculo 4: Categorías Activas únicas
         const categoriasUnicas = new Set(allData.map(item => item.categoria)).size;
 
-        // Actualizamos las tarjetas
         setKpiData(prevKpi => {
           const newKpi = [...prevKpi];
           
@@ -277,7 +303,7 @@ export default function InventarioPage() {
     };
 
     fetchInventario();
-  }, [currentPage, refreshTrigger]);
+  }, [currentPage, refreshTrigger, debouncedSearch]);
 
 
   const handleOpenView = (product) => {
@@ -287,20 +313,55 @@ export default function InventarioPage() {
 
   const handleOpenEdit = (product) => {
     setSelectedProduct(product);
+    setEditForm({
+      nombre_producto: product.name,
+      sku: product.id,
+      categoria: product.category,
+      marca: product.marca,
+      unitOfMeasurement: product.unitOfMeasurement,
+      description: product.description,
+      cost: product.cost.replace(/[^0-9.-]+/g, ""),
+      stock: String(product.stock),
+      price: product.price.replace(/[^0-9.-]+/g, ""),
+    });
     setIsEditOpen(true);
+  };
+
+  const handleEditProduct = async () => {
+    if (!selectedProduct) return;
+    setIsEditSubmitting(true);
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from('productos')
+      .update({
+        nombre_producto: editForm.nombre_producto,
+        categoria: editForm.categoria,
+        marca: editForm.marca,
+        unidad_medida: editForm.unitOfMeasurement,
+        descripcion_detallada: editForm.description,
+        costo_proveedor_usd: parseFloat(editForm.cost) || 0,
+        precio_publico_usd: parseFloat(editForm.price) || 0,
+        stock_inicial: parseInt(editForm.stock) || 0,
+      })
+      .eq('id', selectedProduct.id);
+
+    setIsEditSubmitting(false);
+
+    if (error) {
+      console.error("Error al actualizar producto:", error.message);
+      alert("Error al actualizar producto. Revisa la consola.");
+    } else {
+      setIsEditOpen(false);
+      setRefreshTrigger(prev => prev + 1);
+    }
   };
 
   const filteredAndSortedData = useMemo(() => {
     let data = [...inventoryData];
 
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      data = data.filter(
-        (item) =>
-          item.name.toLowerCase().includes(lowerSearch) ||
-          item.id.toLowerCase().includes(lowerSearch)
-      );
-    }
+    // La búsqueda por nombre ahora se hace en Supabase (server-side)
+    // Aquí solo aplicamos filtros locales como estado
 
     if (filterStatus !== "all") {
       data = data.filter((item) => item.status === filterStatus);
@@ -322,7 +383,7 @@ export default function InventarioPage() {
     });
 
     return data;
-  }, [searchTerm, sortBy, filterStatus, inventoryData]);
+  }, [sortBy, filterStatus, inventoryData]);
 
   if (!isMounted) return null;
 
@@ -337,10 +398,10 @@ export default function InventarioPage() {
             <p className="text-sm text-muted-foreground">Gestiona tus productos, niveles de stock y categorías.</p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">
+            {/* <button className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Exportar</span>
-            </button>
+            </button> */}
             <button
               className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background"
               onClick={() => setIsAddOpen(true)}
@@ -552,11 +613,27 @@ export default function InventarioPage() {
                 <span className="col-span-3 text-sm">{selectedProduct.category}</span>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Stock:</span>
+                <span className="font-semibold text-sm text-muted-foreground">Marca:</span>
+                <span className="col-span-3 text-sm">{selectedProduct.marca}</span>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">Unidad de Medida:</span>
+                <span className="col-span-3 text-sm">{selectedProduct.unitOfMeasurement}</span>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">Descripción:</span>
+                <span className="col-span-3 text-sm">{selectedProduct.description}</span>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">Costo:</span>
+                <span className="col-span-3 text-sm">{selectedProduct.cost}</span>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <span className="font-semibold text-sm text-muted-foreground">Stock Actual:</span>
                 <span className="col-span-3 text-sm">{selectedProduct.stock} unid. <span className="text-muted-foreground">(Mínimo: {selectedProduct.minStock})</span></span>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <span className="font-semibold text-sm text-muted-foreground">Precio:</span>
+                <span className="font-semibold text-sm text-muted-foreground">Precio de Venta:</span>
                 <span className="col-span-3 text-sm font-medium text-emerald-600 dark:text-emerald-400">{selectedProduct.price}</span>
               </div>
             </div>
@@ -578,23 +655,47 @@ export default function InventarioPage() {
             </DialogDescription>
           </DialogHeader>
           {selectedProduct && (
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Nombre</label>
-                <input type="text" defaultValue={selectedProduct.name} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                <label className="text-sm font-medium text-muted-foreground">Nombre del Producto</label>
+                <input type="text" value={editForm.nombre_producto} onChange={(e) => setEditForm({...editForm, nombre_producto: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Precio</label>
-                <input type="text" defaultValue={selectedProduct.price} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                <label className="text-sm font-medium text-muted-foreground">Descripción Detallada</label>
+                <textarea value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all min-h-[80px]" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Stock Actual</label>
-                  <input type="number" defaultValue={selectedProduct.stock} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                  <label className="text-sm font-medium text-muted-foreground">Marca</label>
+                  <input type="text" value={editForm.marca} onChange={(e) => setEditForm({...editForm, marca: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Stock Mínimo</label>
-                  <input type="number" defaultValue={selectedProduct.minStock} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                  <label className="text-sm font-medium text-muted-foreground">Categoría</label>
+                  <input type="text" value={editForm.categoria} onChange={(e) => setEditForm({...editForm, categoria: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Precio Público (USD)</label>
+                  <input type="number" value={editForm.price} onChange={(e) => setEditForm({...editForm, price: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Costo Proveedor (USD)</label>
+                  <input type="number" value={editForm.cost} onChange={(e) => setEditForm({...editForm, cost: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Stock Inicial</label>
+                  <input type="number" value={editForm.stock} onChange={(e) => setEditForm({...editForm, stock: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">Und. Medida</label>
+                  <input type="text" value={editForm.unitOfMeasurement} onChange={(e) => setEditForm({...editForm, unitOfMeasurement: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-muted-foreground">SKU</label>
+                  <input type="text" value={editForm.sku} disabled className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-not-allowed opacity-70" title="El SKU no se puede editar" />
                 </div>
               </div>
             </div>
@@ -603,8 +704,8 @@ export default function InventarioPage() {
             <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
               Cancelar
             </button>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsEditOpen(false)}>
-              Guardar Cambios
+            <button disabled={isEditSubmitting} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50" onClick={handleEditProduct}>
+              {isEditSubmitting ? "Guardando..." : "Guardar Cambios"}
             </button>
           </DialogFooter>
         </DialogContent>
