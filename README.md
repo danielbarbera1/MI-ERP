@@ -171,3 +171,7 @@ create table promociones (
 
 alter table detalles_pedidos
 add column promocion_id bigint references promociones (id);
+
+
+falta los roles de usuario 
+falta terminar la page de configuraciones y reporte 
