@@ -26,7 +26,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
   ShoppingCart,
   Clock,
@@ -39,128 +40,101 @@ import {
   Filter,
   Download,
   Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
-// Mock Data
-const kpiData = [
-  {
-    id: "compras-totales",
-    title: "Compras Totales",
-    value: "$28,450.00",
-    change: "+8.4%",
-    trend: "up",
-    icon: DollarSign,
-    description: "vs. mes anterior",
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-  },
-  {
-    id: "ordenes-pendientes",
-    title: "Órdenes Pendientes",
-    value: "14",
-    change: "-2",
-    trend: "down",
-    icon: Clock,
-    description: "Por recibir",
-    color: "text-orange-500",
-    bg: "bg-orange-500/10",
-  },
-  {
-    id: "pagos-pendientes",
-    title: "Pagos Pendientes",
-    value: "$5,230.50",
-    change: "+12.1%",
-    trend: "up",
-    icon: ShoppingCart,
-    description: "Cuentas por pagar",
-    color: "text-red-500",
-    bg: "bg-red-500/10",
-  },
-  {
-    id: "proveedores",
-    title: "Proveedores Activos",
-    value: "32",
-    change: "+3",
-    trend: "up",
-    icon: Truck,
-    description: "Nuevos este mes",
-    color: "text-emerald-500",
-    bg: "bg-emerald-500/10",
-  },
-];
-
-const purchasesData = [
-  {
-    id: "OC-2026-045",
-    supplier: "Tech Solutions Inc.",
-    email: "ventas@techsolutions.com",
-    date: "2026-06-15",
-    expectedDate: "2026-06-18",
-    amount: "$4,500.00",
-    status: "completado",
-  },
-  {
-    id: "OC-2026-046",
-    supplier: "Distribuidora Nacional",
-    email: "pedidos@distribuidora.com",
-    date: "2026-06-14",
-    expectedDate: "2026-06-20",
-    amount: "$1,250.75",
-    status: "en_camino",
-  },
-  {
-    id: "OC-2026-047",
-    supplier: "Importaciones Globales",
-    email: "contacto@importglobal.com",
-    date: "2026-06-12",
-    expectedDate: "2026-06-25",
-    amount: "$8,900.00",
-    status: "pendiente",
-  },
-  {
-    id: "OC-2026-048",
-    supplier: "Suministros de Oficina S.A.",
-    email: "ventas@suministros.com",
-    date: "2026-06-10",
-    expectedDate: "2026-06-12",
-    amount: "$450.00",
-    status: "completado",
-  },
-  {
-    id: "OC-2026-049",
-    supplier: "Electrónica Mayorista",
-    email: "mayorista@electronica.com",
-    date: "2026-06-08",
-    expectedDate: "2026-06-15",
-    amount: "$12,400.00",
-    status: "retrasado",
-  },
-];
+const normalizeStatus = (st) => {
+  return (st || "")
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "_");
+};
 
 const statusConfig = {
-  completado: {
-    label: "Recibido",
-    className: "bg-emerald-500/15 text-emerald-600 border-emerald-500/20",
+  cancelado: {
+    label: "Cancelado",
+    className: "bg-red-500/15 text-red-600 border-red-500/20",
   },
-  en_camino: {
-    label: "En Camino",
+  en_transito: {
+    label: "En Tránsito",
     className: "bg-blue-500/15 text-blue-600 border-blue-500/20",
   },
-  pendiente: {
-    label: "Pendiente",
+  incompleto: {
+    label: "Incompleto",
     className: "bg-orange-500/15 text-orange-600 border-orange-500/20",
   },
-  retrasado: {
-    label: "Retrasado",
-    className: "bg-red-500/15 text-red-600 border-red-500/20",
+  pendiente_por_autorizar: {
+    label: "Pendiente por Autorizar",
+    className: "bg-yellow-500/15 text-yellow-600 border-yellow-500/20",
+  },
+  recibido_completo: {
+    label: "Recibido Completo",
+    className: "bg-emerald-500/15 text-emerald-600 border-emerald-500/20",
   },
 };
 
 export default function ComprasPage() {
+  const supabase = createClient();
+  const [purchasesData, setPurchasesData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("date-desc");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus, sortBy]);
+
+  const initialFormState = {
+    numero_oc: "",
+    fecha_emision: new Date().toISOString().slice(0, 10),
+    fecha_entrega_est: "",
+    proveedor: "",
+    rif_proveedor: "",
+    monto_total_usd: "",
+    articulos_totales: 1,
+    estatus_orden: "Pendiente por Autorizar",
+    condicion_pago: "30 dias",
+    comprador_responsable: "",
+  };
+  const [formData, setFormData] = useState(initialFormState);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchPurchases();
+  }, []);
+
+  const fetchPurchases = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("ordenes_compra")
+      .select("*")
+      .order("fecha_emision", { ascending: false });
+      
+    if (error) {
+      console.error("Error fetching compras:", error);
+    } else {
+      setPurchasesData(data || []);
+    }
+    setLoading(false);
+  };
+
+  const handleOpenAdd = () => {
+    setFormData(initialFormState);
+    setIsAddOpen(true);
+  };
 
   const handleOpenView = (purchase) => {
     setSelectedPurchase(purchase);
@@ -169,12 +143,58 @@ export default function ComprasPage() {
 
   const handleOpenEdit = (purchase) => {
     setSelectedPurchase(purchase);
+    setFormData({
+      numero_oc: purchase.numero_oc || "",
+      fecha_emision: purchase.fecha_emision ? new Date(purchase.fecha_emision).toISOString().slice(0, 10) : "",
+      fecha_entrega_est: purchase.fecha_entrega_est ? new Date(purchase.fecha_entrega_est).toISOString().slice(0, 10) : "",
+      proveedor: purchase.proveedor || "",
+      rif_proveedor: purchase.rif_proveedor || "",
+      monto_total_usd: purchase.monto_total_usd || "",
+      articulos_totales: purchase.articulos_totales || 1,
+      estatus_orden: purchase.estatus_orden || "Pendiente por Autorizar",
+      condicion_pago: purchase.condicion_pago || "",
+      comprador_responsable: purchase.comprador_responsable || "",
+    });
     setIsEditOpen(true);
   };
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("date-desc");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const handleSave = async () => {
+    setSubmitting(true);
+    const { error } = await supabase.from("ordenes_compra").insert([formData]);
+    if (error) {
+      alert("Error al guardar: " + error.message);
+    } else {
+      setIsAddOpen(false);
+      fetchPurchases();
+    }
+    setSubmitting(false);
+  };
+
+  const handleUpdate = async () => {
+    setSubmitting(true);
+    const { error } = await supabase
+      .from("ordenes_compra")
+      .update(formData)
+      .eq("id", selectedPurchase.id);
+    if (error) {
+      alert("Error al actualizar: " + error.message);
+    } else {
+      setIsEditOpen(false);
+      fetchPurchases();
+    }
+    setSubmitting(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (confirm("¿Estás seguro de que deseas eliminar esta orden de compra?")) {
+      const { error } = await supabase.from("ordenes_compra").delete().eq("id", id);
+      if (error) {
+        alert("Error al eliminar: " + error.message);
+      } else {
+        fetchPurchases();
+      }
+    }
+  };
 
   const filteredAndSortedData = useMemo(() => {
     let data = [...purchasesData];
@@ -183,32 +203,150 @@ export default function ComprasPage() {
       const lowerSearch = searchTerm.toLowerCase();
       data = data.filter(
         (purchase) =>
-          purchase.supplier.toLowerCase().includes(lowerSearch) ||
-          purchase.id.toLowerCase().includes(lowerSearch)
+          (purchase.proveedor && purchase.proveedor.toLowerCase().includes(lowerSearch)) ||
+          (purchase.numero_oc && purchase.numero_oc.toLowerCase().includes(lowerSearch))
       );
     }
 
     if (filterStatus !== "all") {
-      data = data.filter((purchase) => purchase.status === filterStatus);
+      data = data.filter((purchase) => purchase.estatus_orden === filterStatus);
     }
 
     data.sort((a, b) => {
-      if (sortBy === "date-desc") return new Date(b.date) - new Date(a.date);
-      if (sortBy === "date-asc") return new Date(a.date) - new Date(b.date);
+      if (sortBy === "date-desc") return new Date(b.fecha_emision) - new Date(a.fecha_emision);
+      if (sortBy === "date-asc") return new Date(a.fecha_emision) - new Date(b.fecha_emision);
       
-      const amountA = parseFloat(a.amount.replace(/[^0-9.-]+/g,""));
-      const amountB = parseFloat(b.amount.replace(/[^0-9.-]+/g,""));
+      const amountA = parseFloat(a.monto_total_usd) || 0;
+      const amountB = parseFloat(b.monto_total_usd) || 0;
       if (sortBy === "amount-desc") return amountB - amountA;
       if (sortBy === "amount-asc") return amountA - amountB;
 
-      if (sortBy === "name-asc") return a.supplier.localeCompare(b.supplier);
-      if (sortBy === "name-desc") return b.supplier.localeCompare(a.supplier);
+      if (sortBy === "name-asc") return (a.proveedor || "").localeCompare(b.proveedor || "");
+      if (sortBy === "name-desc") return (b.proveedor || "").localeCompare(a.proveedor || "");
 
       return 0;
     });
 
     return data;
-  }, [searchTerm, sortBy, filterStatus]);
+  }, [purchasesData, searchTerm, sortBy, filterStatus]);
+
+  const totalItems = filteredAndSortedData.length;
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedData.slice(start, start + itemsPerPage);
+  }, [filteredAndSortedData, currentPage, itemsPerPage]);
+
+  const kpiData = useMemo(() => {
+    const isCompletado = (st) => normalizeStatus(st) === "recibido_completo";
+    const isPendiente = (st) => {
+      const s = normalizeStatus(st);
+      return s === "pendiente_por_autorizar" || s === "en_transito" || s === "incompleto";
+    };
+
+    const completadas = purchasesData.filter(p => isCompletado(p.estatus_orden));
+    
+    // Totales (Globales)
+    const comprasTotales = completadas.reduce((sum, p) => sum + (parseFloat(p.monto_total_usd) || 0), 0);
+    const pendientesCount = purchasesData.filter(p => isPendiente(p.estatus_orden)).length;
+    
+    const pagosPendientes = purchasesData
+      .filter(p => !isCompletado(p.estatus_orden))
+      .reduce((sum, p) => sum + (parseFloat(p.monto_total_usd) || 0), 0);
+      
+    // Unique suppliers
+    const proveedoresSet = new Set(purchasesData.map(p => p.proveedor).filter(Boolean));
+    const proveedoresActivos = proveedoresSet.size;
+
+    // Calculo changes (Mes actual vs anterior)
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    const currentMonthAll = purchasesData.filter(sale => {
+      if (!sale.fecha_emision) return false;
+      const date = new Date(sale.fecha_emision);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
+    const prevMonthAll = purchasesData.filter(sale => {
+      if (!sale.fecha_emision) return false;
+      const date = new Date(sale.fecha_emision);
+      return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
+    });
+
+    // 1. Compras Totales
+    const currCompras = currentMonthAll.filter(p => isCompletado(p.estatus_orden)).reduce((sum, sale) => sum + (parseFloat(sale.monto_total_usd) || 0), 0);
+    const prevCompras = prevMonthAll.filter(p => isCompletado(p.estatus_orden)).reduce((sum, sale) => sum + (parseFloat(sale.monto_total_usd) || 0), 0);
+    const comprasChange = prevCompras === 0 ? (currCompras > 0 ? 100 : 0) : ((currCompras - prevCompras) / prevCompras) * 100;
+
+    // 2. Órdenes Pendientes
+    const currPendientesCount = currentMonthAll.filter(p => isPendiente(p.estatus_orden)).length;
+    const prevPendientesCount = prevMonthAll.filter(p => isPendiente(p.estatus_orden)).length;
+    const pendientesChange = prevPendientesCount === 0 ? (currPendientesCount > 0 ? 100 : 0) : ((currPendientesCount - prevPendientesCount) / prevPendientesCount) * 100;
+
+    // 3. Pagos Pendientes
+    const currPagosPendientes = currentMonthAll.filter(p => !isCompletado(p.estatus_orden)).reduce((sum, p) => sum + (parseFloat(p.monto_total_usd) || 0), 0);
+    const prevPagosPendientes = prevMonthAll.filter(p => !isCompletado(p.estatus_orden)).reduce((sum, p) => sum + (parseFloat(p.monto_total_usd) || 0), 0);
+    const pagosPendientesChange = prevPagosPendientes === 0 ? (currPagosPendientes > 0 ? 100 : 0) : ((currPagosPendientes - prevPagosPendientes) / prevPagosPendientes) * 100;
+
+    // 4. Proveedores Activos
+    const currProveedores = new Set(currentMonthAll.map(p => p.proveedor).filter(Boolean)).size;
+    const prevProveedores = new Set(prevMonthAll.map(p => p.proveedor).filter(Boolean)).size;
+    const proveedoresChange = prevProveedores === 0 ? (currProveedores > 0 ? 100 : 0) : ((currProveedores - prevProveedores) / prevProveedores) * 100;
+
+    const formatChange = (val) => {
+      if (!isFinite(val)) return "0%";
+      return `${val > 0 ? '+' : ''}${val.toFixed(1)}%`;
+    };
+
+    return [
+      {
+        id: "compras-totales",
+        title: "Compras Totales",
+        value: `$${comprasTotales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        change: formatChange(comprasChange),
+        trend: comprasChange >= 0 ? "up" : "down",
+        icon: DollarSign,
+        description: "vs. mes anterior",
+        color: "text-blue-500",
+        bg: "bg-blue-500/10",
+      },
+      {
+        id: "ordenes-pendientes",
+        title: "Órdenes Pendientes",
+        value: pendientesCount.toString(),
+        change: formatChange(pendientesChange),
+        trend: pendientesChange <= 0 ? "up" : "down", // Bajar órdenes pendientes es bueno (verde)
+        icon: Clock,
+        description: "vs. mes anterior",
+        color: "text-orange-500",
+        bg: "bg-orange-500/10",
+      },
+      {
+        id: "pagos-pendientes",
+        title: "Pagos Pendientes",
+        value: `$${pagosPendientes.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        change: formatChange(pagosPendientesChange),
+        trend: pagosPendientesChange <= 0 ? "up" : "down", // Bajar deuda es bueno (verde)
+        icon: ShoppingCart,
+        description: "vs. mes anterior",
+        color: "text-red-500",
+        bg: "bg-red-500/10",
+      },
+      {
+        id: "proveedores",
+        title: "Proveedores Activos",
+        value: proveedoresActivos.toString(),
+        change: formatChange(proveedoresChange),
+        trend: proveedoresChange >= 0 ? "up" : "down",
+        icon: Truck,
+        description: "vs. mes anterior",
+        color: "text-emerald-500",
+        bg: "bg-emerald-500/10",
+      },
+    ];
+  }, [purchasesData]);
 
   return (
     <ERPLayout title="Compras">
@@ -221,13 +359,13 @@ export default function ComprasPage() {
             <p className="text-sm text-muted-foreground">Administra órdenes de compra y proveedores.</p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">
+            {/* <button className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Exportar</span>
-            </button>
+            </button> */}
             <button 
               className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background"
-              onClick={() => setIsAddOpen(true)}
+              onClick={handleOpenAdd}
             >
               <Plus className="h-4 w-4" />
               Nueva Orden
@@ -247,10 +385,12 @@ export default function ComprasPage() {
                     <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${kpi.bg}`}>
                       <Icon className={`h-5 w-5 ${kpi.color}`} />
                     </div>
-                    <div className={`flex items-center gap-1 text-xs font-medium ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                      {isUp ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
-                      {kpi.change}
-                    </div>
+                    {kpi.change && (
+                      <div className={`flex items-center gap-1 text-xs font-medium ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                        {isUp ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                        {kpi.change}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
@@ -299,10 +439,11 @@ export default function ComprasPage() {
                     <DropdownMenuRadioGroup value={filterStatus} onValueChange={setFilterStatus}>
                       <DropdownMenuLabel>Filtrar por Estado</DropdownMenuLabel>
                       <DropdownMenuRadioItem value="all">Todos los estados</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="completado">Recibido</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="en_camino">En Camino</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="pendiente">Pendiente</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="retrasado">Retrasado</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Recibido Completo">Recibido Completo</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="En Tránsito">En Tránsito</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Pendiente por Autorizar">Pendiente por Autorizar</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Incompleto">Incompleto</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Cancelado">Cancelado</DropdownMenuRadioItem>
                     </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -317,26 +458,37 @@ export default function ComprasPage() {
                   <th className="px-6 py-3 font-semibold">Proveedor</th>
                   <th className="px-6 py-3 font-semibold">Fecha Emisión</th>
                   <th className="px-6 py-3 font-semibold">Entrega Est.</th>
+                  <th className="px-6 py-3 font-semibold">Responsable</th>
                   <th className="px-6 py-3 font-semibold">Total</th>
                   <th className="px-6 py-3 font-semibold">Estado</th>
                   <th className="px-6 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredAndSortedData.map((purchase) => {
-                  const status = statusConfig[purchase.status];
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-muted-foreground">Cargando datos...</td>
+                  </tr>
+                ) : paginatedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-muted-foreground">No hay órdenes registradas.</td>
+                  </tr>
+                ) : paginatedData.map((purchase) => {
+                  const normalizedStatus = normalizeStatus(purchase.estatus_orden);
+                  const status = statusConfig[normalizedStatus] || { label: purchase.estatus_orden, className: "bg-gray-500/15 text-gray-600 border-gray-500/20" };
                   return (
                     <tr key={purchase.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-medium">{purchase.id}</td>
+                      <td className="px-6 py-4 font-mono text-xs font-medium">{purchase.numero_oc || "N/A"}</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{purchase.supplier}</span>
-                          <span className="text-xs text-muted-foreground">{purchase.email}</span>
+                          <span className="font-medium text-foreground">{purchase.proveedor}</span>
+                          <span className="text-xs text-muted-foreground">RIF: {purchase.rif_proveedor}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground">{purchase.date}</td>
-                      <td className="px-6 py-4 text-muted-foreground">{purchase.expectedDate}</td>
-                      <td className="px-6 py-4 font-medium text-foreground">{purchase.amount}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{purchase.fecha_emision ? new Date(purchase.fecha_emision).toLocaleDateString() : "N/A"}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{purchase.fecha_entrega_est ? new Date(purchase.fecha_entrega_est).toLocaleDateString() : "N/A"}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{purchase.comprador_responsable || "N/A"}</td>
+                      <td className="px-6 py-4 font-medium text-foreground">${parseFloat(purchase.monto_total_usd || 0).toFixed(2)}</td>
                       <td className="px-6 py-4">
                         <Badge variant="outline" className={`text-xs ${status.className}`}>
                           {status.label}
@@ -353,7 +505,7 @@ export default function ComprasPage() {
                             <DropdownMenuItem onClick={() => handleOpenView(purchase)}>Ver detalles</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleOpenEdit(purchase)}>Editar orden</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-600 focus:text-red-600 focus:bg-red-50">Eliminar</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDelete(purchase.id)} className="text-red-600 focus:text-red-600 focus:bg-red-50">Eliminar</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
@@ -363,47 +515,96 @@ export default function ComprasPage() {
               </tbody>
             </table>
           </CardContent>
+          {/* Paginación */}
+          <div className="flex items-center justify-between border-t border-border px-6 py-4 bg-background rounded-b-xl">
+            <div className="text-sm text-muted-foreground">
+              Mostrando página <span className="font-medium text-foreground">{currentPage}</span> de <span className="font-medium text-foreground">{Math.max(1, Math.ceil(totalItems / itemsPerPage))}</span>
+              {" "}(Total: {totalItems} registros)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => p + 1)}
+                disabled={currentPage >= Math.ceil(totalItems / itemsPerPage) || totalItems === 0}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Siguiente
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </Card>
       </div>
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Nueva Orden de Compra</DialogTitle>
             <DialogDescription>
               Crea una nueva orden para un proveedor.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Número OC</label>
+              <input type="text" value={formData.numero_oc} onChange={(e) => setFormData({...formData, numero_oc: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-muted-foreground">Proveedor</label>
-              <input type="text" placeholder="Ej. Proveedora ABC" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <input type="text" value={formData.proveedor} onChange={(e) => setFormData({...formData, proveedor: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Monto Total</label>
-              <input type="text" placeholder="Ej. $5,000.00" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <label className="text-sm font-medium text-muted-foreground">RIF Proveedor</label>
+              <input type="text" value={formData.rif_proveedor} onChange={(e) => setFormData({...formData, rif_proveedor: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Fecha Estimada</label>
-                <input type="date" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Estado</label>
-                <select className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                  <option>Borrador</option>
-                  <option>Enviada</option>
-                  <option>En tránsito</option>
-                </select>
-              </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Monto Total (USD)</label>
+              <input type="number" step="0.01" value={formData.monto_total_usd} onChange={(e) => setFormData({...formData, monto_total_usd: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Artículos Totales</label>
+              <input type="number" value={formData.articulos_totales} onChange={(e) => setFormData({...formData, articulos_totales: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Comprador Responsable</label>
+              <input type="text" value={formData.comprador_responsable} onChange={(e) => setFormData({...formData, comprador_responsable: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Fecha Emisión</label>
+              <input type="date" value={formData.fecha_emision} onChange={(e) => setFormData({...formData, fecha_emision: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Fecha Entrega Est.</label>
+              <input type="date" value={formData.fecha_entrega_est} onChange={(e) => setFormData({...formData, fecha_entrega_est: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Condición Pago</label>
+              <input type="text" value={formData.condicion_pago} onChange={(e) => setFormData({...formData, condicion_pago: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Estado</label>
+              <select value={formData.estatus_orden} onChange={(e) => setFormData({...formData, estatus_orden: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                <option value="Recibido Completo">Recibido Completo</option>
+                <option value="En Tránsito">En Tránsito</option>
+                <option value="Pendiente por Autorizar">Pendiente por Autorizar</option>
+                <option value="Incompleto">Incompleto</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
             </div>
           </div>
           <DialogFooter>
-            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
+            <button disabled={submitting} className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
               Cancelar
             </button>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsAddOpen(false)}>
-              Crear Orden
+            <button disabled={submitting} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={handleSave}>
+              {submitting ? "Guardando..." : "Crear Orden"}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -411,7 +612,7 @@ export default function ComprasPage() {
 
       {/* Modal de Ver Detalles */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Detalles de Orden de Compra</DialogTitle>
             <DialogDescription>
@@ -419,39 +620,52 @@ export default function ComprasPage() {
             </DialogDescription>
           </DialogHeader>
           {selectedPurchase && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">ID Orden</h4>
-                  <p className="text-sm font-medium">{selectedPurchase.id}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Estado</h4>
-                  <Badge variant="outline" className={`mt-1 text-xs ${statusConfig[selectedPurchase.status]?.className}`}>
-                    {statusConfig[selectedPurchase.status]?.label}
-                  </Badge>
-                </div>
+            <div className="grid gap-4 py-4 grid-cols-2">
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">ID BD</h4>
+                <p className="text-sm font-medium">{selectedPurchase.id}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Proveedor</h4>
-                  <p className="text-sm font-medium">{selectedPurchase.supplier}</p>
-                  <p className="text-xs text-muted-foreground">{selectedPurchase.email}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Monto Total</h4>
-                  <p className="text-sm font-medium">{selectedPurchase.amount}</p>
-                </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Número OC</h4>
+                <p className="text-sm font-medium">{selectedPurchase.numero_oc || "N/A"}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Fecha Emisión</h4>
-                  <p className="text-sm font-medium">{selectedPurchase.date}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Entrega Estimada</h4>
-                  <p className="text-sm font-medium">{selectedPurchase.expectedDate}</p>
-                </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Estado</h4>
+                <Badge variant="outline" className={`mt-1 text-xs ${statusConfig[selectedPurchase.estatus_orden]?.className || "bg-gray-100 text-gray-800"}`}>
+                  {statusConfig[selectedPurchase.estatus_orden]?.label || selectedPurchase.estatus_orden}
+                </Badge>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Monto Total</h4>
+                <p className="text-sm font-medium">${parseFloat(selectedPurchase.monto_total_usd || 0).toFixed(2)}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Proveedor</h4>
+                <p className="text-sm font-medium">{selectedPurchase.proveedor}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">RIF Proveedor</h4>
+                <p className="text-sm font-medium">{selectedPurchase.rif_proveedor || "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Fecha Emisión</h4>
+                <p className="text-sm font-medium">{selectedPurchase.fecha_emision ? new Date(selectedPurchase.fecha_emision).toLocaleDateString() : "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Entrega Estimada</h4>
+                <p className="text-sm font-medium">{selectedPurchase.fecha_entrega_est ? new Date(selectedPurchase.fecha_entrega_est).toLocaleDateString() : "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Artículos Totales</h4>
+                <p className="text-sm font-medium">{selectedPurchase.articulos_totales}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Condición Pago</h4>
+                <p className="text-sm font-medium">{selectedPurchase.condicion_pago || "N/A"}</p>
+              </div>
+              <div className="col-span-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">Comprador Responsable</h4>
+                <p className="text-sm font-medium">{selectedPurchase.comprador_responsable || "N/A"}</p>
               </div>
             </div>
           )}
@@ -465,46 +679,67 @@ export default function ComprasPage() {
 
       {/* Modal de Editar Orden */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Editar Orden de Compra</DialogTitle>
             <DialogDescription>
               Modifica la información de esta orden de compra.
             </DialogDescription>
           </DialogHeader>
-          {selectedPurchase && (
-            <div className="grid gap-4 py-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Proveedor</label>
-                <input type="text" defaultValue={selectedPurchase.supplier} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Monto Total</label>
-                <input type="text" defaultValue={selectedPurchase.amount} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Fecha Estimada</label>
-                  <input type="date" defaultValue={selectedPurchase.expectedDate} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Estado</label>
-                  <select defaultValue={selectedPurchase.status} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                    <option value="completado">Recibido</option>
-                    <option value="en_camino">En Camino</option>
-                    <option value="pendiente">Pendiente</option>
-                    <option value="retrasado">Retrasado</option>
-                  </select>
-                </div>
-              </div>
+          <div className="grid gap-4 py-4 grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Número OC</label>
+              <input type="text" value={formData.numero_oc} onChange={(e) => setFormData({...formData, numero_oc: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
-          )}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Proveedor</label>
+              <input type="text" value={formData.proveedor} onChange={(e) => setFormData({...formData, proveedor: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">RIF Proveedor</label>
+              <input type="text" value={formData.rif_proveedor} onChange={(e) => setFormData({...formData, rif_proveedor: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Monto Total (USD)</label>
+              <input type="number" step="0.01" value={formData.monto_total_usd} onChange={(e) => setFormData({...formData, monto_total_usd: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Artículos Totales</label>
+              <input type="number" value={formData.articulos_totales} onChange={(e) => setFormData({...formData, articulos_totales: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Comprador Responsable</label>
+              <input type="text" value={formData.comprador_responsable} onChange={(e) => setFormData({...formData, comprador_responsable: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Fecha Emisión</label>
+              <input type="date" value={formData.fecha_emision} onChange={(e) => setFormData({...formData, fecha_emision: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Fecha Entrega Est.</label>
+              <input type="date" value={formData.fecha_entrega_est} onChange={(e) => setFormData({...formData, fecha_entrega_est: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Condición Pago</label>
+              <input type="text" value={formData.condicion_pago} onChange={(e) => setFormData({...formData, condicion_pago: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Estado</label>
+              <select value={formData.estatus_orden} onChange={(e) => setFormData({...formData, estatus_orden: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                <option value="Recibido Completo">Recibido Completo</option>
+                <option value="En Tránsito">En Tránsito</option>
+                <option value="Pendiente por Autorizar">Pendiente por Autorizar</option>
+                <option value="Incompleto">Incompleto</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
+            </div>
+          </div>
           <DialogFooter>
-            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
+            <button disabled={submitting} className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
               Cancelar
             </button>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsEditOpen(false)}>
-              Guardar Cambios
+            <button disabled={submitting} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={handleUpdate}>
+              {submitting ? "Guardando..." : "Guardar Cambios"}
             </button>
           </DialogFooter>
         </DialogContent>
