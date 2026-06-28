@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Users,
   UserPlus,
@@ -39,112 +39,20 @@ import {
   Filter,
   Download,
   Search,
+  ChevronLeft,
+  ChevronRight,
+  DollarSign
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
-// Mock Data
-const kpiData = [
-  {
-    id: "empleados-activos",
-    title: "Empleados Activos",
-    value: "145",
-    change: "+3",
-    trend: "up",
-    icon: Users,
-    description: "vs. mes anterior",
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-  },
-  {
-    id: "vacantes",
-    title: "Posiciones Abiertas",
-    value: "8",
-    change: "+2",
-    trend: "up",
-    icon: Briefcase,
-    description: "En proceso de selección",
-    color: "text-purple-500",
-    bg: "bg-purple-500/10",
-  },
-  {
-    id: "ausencias",
-    title: "Ausencias / Vacaciones",
-    value: "12",
-    change: "-1",
-    trend: "down",
-    icon: CalendarDays,
-    description: "Esta semana",
-    color: "text-orange-500",
-    bg: "bg-orange-500/10",
-  },
-  {
-    id: "nuevos-ingresos",
-    title: "Nuevos Ingresos",
-    value: "5",
-    change: "+5",
-    trend: "up",
-    icon: UserPlus,
-    description: "Este mes",
-    color: "text-emerald-500",
-    bg: "bg-emerald-500/10",
-  },
-];
-
-const employeeData = [
-  {
-    id: "EMP-001",
-    name: "Ana Martínez",
-    email: "amartinez@empresa.com",
-    role: "Directora de Ventas",
-    department: "Ventas",
-    hireDate: "2020-03-15",
-    status: "activo",
-  },
-  {
-    id: "EMP-042",
-    name: "Carlos Ruiz",
-    email: "cruiz@empresa.com",
-    role: "Desarrollador Senior",
-    department: "IT",
-    hireDate: "2022-08-01",
-    status: "vacaciones",
-  },
-  {
-    id: "EMP-087",
-    name: "Laura Gómez",
-    email: "lgomez@empresa.com",
-    role: "Analista Contable",
-    department: "Finanzas",
-    hireDate: "2024-01-10",
-    status: "activo",
-  },
-  {
-    id: "EMP-112",
-    name: "Miguel Torres",
-    email: "mtorres@empresa.com",
-    role: "Especialista en Marketing",
-    department: "Marketing",
-    hireDate: "2025-05-20",
-    status: "activo",
-  },
-  {
-    id: "EMP-143",
-    name: "Sofía Vargas",
-    email: "svargas@empresa.com",
-    role: "Representante de Soporte",
-    department: "Atención al Cliente",
-    hireDate: "2026-02-05",
-    status: "licencia",
-  },
-  {
-    id: "EMP-145",
-    name: "David Silva",
-    email: "dsilva@empresa.com",
-    role: "Asistente de Recursos Humanos",
-    department: "RRHH",
-    hireDate: "2026-06-01",
-    status: "activo",
-  },
-];
+const normalizeStatus = (st) => {
+  return (st || "")
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "_");
+};
 
 const statusConfig = {
   activo: {
@@ -166,10 +74,64 @@ const statusConfig = {
 };
 
 export default function RRHHPage() {
+  const supabase = createClient();
+  const [employeesData, setEmployeesData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus, sortBy]);
+
+  const initialFormState = {
+    cedula: "",
+    nombre_completo: "",
+    departamento: "",
+    cargo_puesto: "",
+    email_corporativo: "",
+    telefono_movil: "",
+    fecha_ingreso: new Date().toISOString().slice(0, 10),
+    salario_base_usd: "",
+    estatus: "Activo",
+    supervisor_directo: "",
+  };
+  const [formData, setFormData] = useState(initialFormState);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("empleados")
+      .select("*")
+      .order("nombre_completo", { ascending: true });
+      
+    if (error) {
+      console.error("Error fetching empleados:", error);
+    } else {
+      setEmployeesData(data || []);
+    }
+    setLoading(false);
+  };
+
+  const handleOpenAdd = () => {
+    setFormData(initialFormState);
+    setIsAddOpen(true);
+  };
 
   const handleOpenView = (employee) => {
     setSelectedEmployee(employee);
@@ -178,41 +140,179 @@ export default function RRHHPage() {
 
   const handleOpenEdit = (employee) => {
     setSelectedEmployee(employee);
+    setFormData({
+      cedula: employee.cedula || "",
+      nombre_completo: employee.nombre_completo || "",
+      departamento: employee.departamento || "",
+      cargo_puesto: employee.cargo_puesto || "",
+      email_corporativo: employee.email_corporativo || "",
+      telefono_movil: employee.telefono_movil || "",
+      fecha_ingreso: employee.fecha_ingreso ? new Date(employee.fecha_ingreso).toISOString().slice(0, 10) : "",
+      salario_base_usd: employee.salario_base_usd || "",
+      estatus: employee.estatus || "Activo",
+      supervisor_directo: employee.supervisor_directo || "",
+    });
     setIsEditOpen(true);
   };
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("name-asc");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const handleSave = async () => {
+    setSubmitting(true);
+    const { error } = await supabase.from("empleados").insert([formData]);
+    if (error) {
+      alert("Error al guardar: " + error.message);
+    } else {
+      setIsAddOpen(false);
+      fetchEmployees();
+    }
+    setSubmitting(false);
+  };
+
+  const handleUpdate = async () => {
+    setSubmitting(true);
+    const { error } = await supabase
+      .from("empleados")
+      .update(formData)
+      .eq("id", selectedEmployee.id);
+      
+    if (error) {
+      alert("Error al actualizar: " + error.message);
+    } else {
+      setIsEditOpen(false);
+      fetchEmployees();
+    }
+    setSubmitting(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (confirm("¿Estás seguro de que deseas eliminar este empleado?")) {
+      const { error } = await supabase.from("empleados").delete().eq("id", id);
+      if (error) {
+        alert("Error al eliminar: " + error.message);
+      } else {
+        fetchEmployees();
+      }
+    }
+  };
 
   const filteredAndSortedData = useMemo(() => {
-    let data = [...employeeData];
+    let data = [...employeesData];
 
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       data = data.filter(
         (employee) =>
-          employee.name.toLowerCase().includes(lowerSearch) ||
-          employee.id.toLowerCase().includes(lowerSearch) ||
-          employee.role.toLowerCase().includes(lowerSearch)
+          (employee.nombre_completo && employee.nombre_completo.toLowerCase().includes(lowerSearch)) ||
+          (employee.cedula && employee.cedula.toLowerCase().includes(lowerSearch)) ||
+          (employee.cargo_puesto && employee.cargo_puesto.toLowerCase().includes(lowerSearch))
       );
     }
 
     if (filterStatus !== "all") {
-      data = data.filter((employee) => employee.status === filterStatus);
+      data = data.filter((employee) => employee.estatus === filterStatus);
     }
 
     data.sort((a, b) => {
-      if (sortBy === "name-asc") return a.name.localeCompare(b.name);
-      if (sortBy === "name-desc") return b.name.localeCompare(a.name);
-      if (sortBy === "date-desc") return new Date(b.hireDate) - new Date(a.hireDate);
-      if (sortBy === "date-asc") return new Date(a.hireDate) - new Date(b.hireDate);
-
+      if (sortBy === "name-asc") return (a.nombre_completo || "").localeCompare(b.nombre_completo || "");
+      if (sortBy === "name-desc") return (b.nombre_completo || "").localeCompare(a.nombre_completo || "");
+      if (sortBy === "date-desc") return new Date(b.fecha_ingreso || 0) - new Date(a.fecha_ingreso || 0);
+      if (sortBy === "date-asc") return new Date(a.fecha_ingreso || 0) - new Date(b.fecha_ingreso || 0);
       return 0;
     });
 
     return data;
-  }, [searchTerm, sortBy, filterStatus]);
+  }, [employeesData, searchTerm, sortBy, filterStatus]);
+
+  const totalItems = filteredAndSortedData.length;
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedData.slice(start, start + itemsPerPage);
+  }, [filteredAndSortedData, currentPage, itemsPerPage]);
+
+  const kpiData = useMemo(() => {
+    const isActivo = (st) => normalizeStatus(st) === "activo";
+    const isAusente = (st) => {
+      const s = normalizeStatus(st);
+      return s === "vacaciones" || s === "licencia";
+    };
+
+    const activos = employeesData.filter(e => isActivo(e.estatus));
+    const activosCount = activos.length;
+    const ausenciasCount = employeesData.filter(e => isAusente(e.estatus)).length;
+    
+    const nominaMensual = activos.reduce((sum, e) => sum + (parseFloat(e.salario_base_usd) || 0), 0);
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    const currentMonthNuevos = employeesData.filter(e => {
+      if (!e.fecha_ingreso) return false;
+      const date = new Date(e.fecha_ingreso);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    }).length;
+    
+    const prevMonthNuevos = employeesData.filter(e => {
+      if (!e.fecha_ingreso) return false;
+      const date = new Date(e.fecha_ingreso);
+      return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
+    }).length;
+
+    const nuevosChange = prevMonthNuevos === 0 ? (currentMonthNuevos > 0 ? 100 : 0) : ((currentMonthNuevos - prevMonthNuevos) / prevMonthNuevos) * 100;
+
+    const formatChange = (val) => {
+      if (!isFinite(val)) return "0%";
+      return `${val > 0 ? '+' : ''}${val.toFixed(1)}%`;
+    };
+
+    return [
+      {
+        id: "empleados-activos",
+        title: "Empleados Activos",
+        value: activosCount.toString(),
+        change: "",
+        trend: "up",
+        icon: Users,
+        description: "Plantilla actual",
+        color: "text-blue-500",
+        bg: "bg-blue-500/10",
+      },
+      {
+        id: "nomina-mensual",
+        title: "Nómina Mensual",
+        value: `$${nominaMensual.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        change: "",
+        trend: "up",
+        icon: DollarSign,
+        description: "Salario base empleados activos",
+        color: "text-purple-500",
+        bg: "bg-purple-500/10",
+      },
+      {
+        id: "ausencias",
+        title: "Ausencias / Licencias",
+        value: ausenciasCount.toString(),
+        change: "",
+        trend: "down",
+        icon: CalendarDays,
+        description: "En este momento",
+        color: "text-orange-500",
+        bg: "bg-orange-500/10",
+      },
+      {
+        id: "nuevos-ingresos",
+        title: "Nuevos Ingresos",
+        value: currentMonthNuevos.toString(),
+        change: formatChange(nuevosChange),
+        trend: nuevosChange >= 0 ? "up" : "down",
+        icon: UserPlus,
+        description: "Este mes vs. anterior",
+        color: "text-emerald-500",
+        bg: "bg-emerald-500/10",
+      },
+    ];
+  }, [employeesData]);
 
   return (
     <ERPLayout title="Recursos Humanos">
@@ -225,13 +325,13 @@ export default function RRHHPage() {
             <p className="text-sm text-muted-foreground">Administra el personal, nóminas y estructura organizacional.</p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">
+            {/* <button className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Exportar</span>
-            </button>
+            </button> */}
             <button 
               className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background"
-              onClick={() => setIsAddOpen(true)}
+              onClick={handleOpenAdd}
             >
               <Plus className="h-4 w-4" />
               Nuevo Empleado
@@ -251,10 +351,12 @@ export default function RRHHPage() {
                     <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${kpi.bg}`}>
                       <Icon className={`h-5 w-5 ${kpi.color}`} />
                     </div>
-                    <div className={`flex items-center gap-1 text-xs font-medium ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-                      {isUp ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
-                      {kpi.change}
-                    </div>
+                    {kpi.change && (
+                      <div className={`flex items-center gap-1 text-xs font-medium ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+                        {isUp ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                        {kpi.change}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
@@ -279,7 +381,7 @@ export default function RRHHPage() {
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Buscar por nombre o ID..."
+                    placeholder="Buscar por nombre o cédula..."
                     className="w-full rounded-md border border-border bg-background pl-9 pr-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                   />
                 </div>
@@ -302,9 +404,10 @@ export default function RRHHPage() {
                     <DropdownMenuRadioGroup value={filterStatus} onValueChange={setFilterStatus}>
                       <DropdownMenuLabel>Filtrar por Estado</DropdownMenuLabel>
                       <DropdownMenuRadioItem value="all">Todos los estados</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="activo">Activo</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="vacaciones">Vacaciones</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="licencia">Licencia</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Activo">Activo</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Vacaciones">Vacaciones</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Licencia">Licencia</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Inactivo">Inactivo</DropdownMenuRadioItem>
                     </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -315,30 +418,41 @@ export default function RRHHPage() {
             <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 text-muted-foreground sticky top-0">
                 <tr>
-                  <th className="px-6 py-3 font-semibold">ID</th>
+                  <th className="px-6 py-3 font-semibold">Cédula</th>
                   <th className="px-6 py-3 font-semibold">Empleado</th>
                   <th className="px-6 py-3 font-semibold">Cargo</th>
                   <th className="px-6 py-3 font-semibold">Departamento</th>
                   <th className="px-6 py-3 font-semibold">Fecha Ingreso</th>
+                  <th className="px-6 py-3 font-semibold">Salario</th>
                   <th className="px-6 py-3 font-semibold">Estado</th>
                   <th className="px-6 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredAndSortedData.map((employee) => {
-                  const status = statusConfig[employee.status];
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-muted-foreground">Cargando datos...</td>
+                  </tr>
+                ) : paginatedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-muted-foreground">No hay empleados registrados.</td>
+                  </tr>
+                ) : paginatedData.map((employee) => {
+                  const normalizedStatus = normalizeStatus(employee.estatus);
+                  const status = statusConfig[normalizedStatus] || { label: employee.estatus, className: "bg-gray-500/15 text-gray-600 border-gray-500/20" };
                   return (
                     <tr key={employee.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-medium">{employee.id}</td>
+                      <td className="px-6 py-4 font-mono text-xs font-medium">{employee.cedula || "N/A"}</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{employee.name}</span>
-                          <span className="text-xs text-muted-foreground">{employee.email}</span>
+                          <span className="font-medium text-foreground">{employee.nombre_completo}</span>
+                          <span className="text-xs text-muted-foreground">{employee.email_corporativo}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground">{employee.role}</td>
-                      <td className="px-6 py-4 font-medium text-foreground">{employee.department}</td>
-                      <td className="px-6 py-4 text-muted-foreground">{employee.hireDate}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{employee.cargo_puesto}</td>
+                      <td className="px-6 py-4 font-medium text-foreground">{employee.departamento}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{employee.fecha_ingreso ? new Date(employee.fecha_ingreso).toLocaleDateString() : "N/A"}</td>
+                      <td className="px-6 py-4 font-medium text-foreground">${parseFloat(employee.salario_base_usd || 0).toFixed(2)}</td>
                       <td className="px-6 py-4">
                         <Badge variant="outline" className={`text-xs ${status.className}`}>
                           {status.label}
@@ -354,7 +468,8 @@ export default function RRHHPage() {
                           <DropdownMenuContent>
                             <DropdownMenuItem onClick={() => handleOpenView(employee)}>Ver detalles</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleOpenEdit(employee)}>Editar empleado</DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600 focus:text-red-600 focus:bg-red-50">Dar de baja</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleDelete(employee.id)} className="text-red-600 focus:text-red-600 focus:bg-red-50">Dar de baja / Eliminar</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
@@ -364,48 +479,94 @@ export default function RRHHPage() {
               </tbody>
             </table>
           </CardContent>
+          <div className="flex items-center justify-between border-t border-border px-6 py-4 bg-background rounded-b-xl">
+            <div className="text-sm text-muted-foreground">
+              Mostrando página <span className="font-medium text-foreground">{currentPage}</span> de <span className="font-medium text-foreground">{Math.max(1, Math.ceil(totalItems / itemsPerPage))}</span>
+              {" "}(Total: {totalItems} registros)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => p + 1)}
+                disabled={currentPage >= Math.ceil(totalItems / itemsPerPage) || totalItems === 0}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Siguiente
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </Card>
       </div>
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Nuevo Empleado</DialogTitle>
             <DialogDescription>
-              Añade un nuevo miembro al equipo.
+              Añade un nuevo miembro al equipo en la base de datos.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Cédula</label>
+              <input type="text" value={formData.cedula} onChange={(e) => setFormData({...formData, cedula: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-muted-foreground">Nombre Completo</label>
-              <input type="text" placeholder="Ej. Ana Martínez" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <input type="text" value={formData.nombre_completo} onChange={(e) => setFormData({...formData, nombre_completo: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Correo Electrónico</label>
-              <input type="email" placeholder="Ej. ana@empresa.com" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <label className="text-sm font-medium text-muted-foreground">Departamento</label>
+              <input type="text" value={formData.departamento} onChange={(e) => setFormData({...formData, departamento: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Cargo</label>
-                <input type="text" placeholder="Ej. Desarrollador" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Departamento</label>
-                <select className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                  <option>Tecnología</option>
-                  <option>Ventas</option>
-                  <option>Recursos Humanos</option>
-                  <option>Operaciones</option>
-                </select>
-              </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Cargo / Puesto</label>
+              <input type="text" value={formData.cargo_puesto} onChange={(e) => setFormData({...formData, cargo_puesto: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Email Corporativo</label>
+              <input type="email" value={formData.email_corporativo} onChange={(e) => setFormData({...formData, email_corporativo: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Teléfono Móvil</label>
+              <input type="text" value={formData.telefono_movil} onChange={(e) => setFormData({...formData, telefono_movil: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Fecha de Ingreso</label>
+              <input type="date" value={formData.fecha_ingreso} onChange={(e) => setFormData({...formData, fecha_ingreso: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Salario Base (USD)</label>
+              <input type="number" step="0.01" value={formData.salario_base_usd} onChange={(e) => setFormData({...formData, salario_base_usd: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Supervisor Directo</label>
+              <input type="text" value={formData.supervisor_directo} onChange={(e) => setFormData({...formData, supervisor_directo: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Estado</label>
+              <select value={formData.estatus} onChange={(e) => setFormData({...formData, estatus: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                <option value="Activo">Activo</option>
+                <option value="Vacaciones">Vacaciones</option>
+                <option value="Licencia">Licencia</option>
+                <option value="Inactivo">Inactivo</option>
+              </select>
             </div>
           </div>
           <DialogFooter>
-            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
+            <button disabled={submitting} className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
               Cancelar
             </button>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsAddOpen(false)}>
-              Crear Empleado
+            <button disabled={submitting} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={handleSave}>
+              {submitting ? "Guardando..." : "Crear Empleado"}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -413,7 +574,7 @@ export default function RRHHPage() {
 
       {/* Modal de Ver Detalles */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Detalles del Empleado</DialogTitle>
             <DialogDescription>
@@ -421,39 +582,52 @@ export default function RRHHPage() {
             </DialogDescription>
           </DialogHeader>
           {selectedEmployee && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">ID Empleado</h4>
-                  <p className="text-sm font-medium">{selectedEmployee.id}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Estado</h4>
-                  <Badge variant="outline" className={`mt-1 text-xs ${statusConfig[selectedEmployee.status]?.className}`}>
-                    {statusConfig[selectedEmployee.status]?.label}
-                  </Badge>
-                </div>
+            <div className="grid gap-4 py-4 grid-cols-2">
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">ID BD</h4>
+                <p className="text-sm font-medium">{selectedEmployee.id}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Nombre Completo</h4>
-                  <p className="text-sm font-medium">{selectedEmployee.name}</p>
-                  <p className="text-xs text-muted-foreground">{selectedEmployee.email}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Fecha de Ingreso</h4>
-                  <p className="text-sm font-medium">{selectedEmployee.hireDate}</p>
-                </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Cédula</h4>
+                <p className="text-sm font-medium">{selectedEmployee.cedula || "N/A"}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Cargo</h4>
-                  <p className="text-sm font-medium">{selectedEmployee.role}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Departamento</h4>
-                  <p className="text-sm font-medium">{selectedEmployee.department}</p>
-                </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Nombre Completo</h4>
+                <p className="text-sm font-medium">{selectedEmployee.nombre_completo}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Estado</h4>
+                <Badge variant="outline" className={`mt-1 text-xs ${statusConfig[normalizeStatus(selectedEmployee.estatus)]?.className || "bg-gray-100 text-gray-800"}`}>
+                  {statusConfig[normalizeStatus(selectedEmployee.estatus)]?.label || selectedEmployee.estatus}
+                </Badge>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Departamento</h4>
+                <p className="text-sm font-medium">{selectedEmployee.departamento || "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Cargo / Puesto</h4>
+                <p className="text-sm font-medium">{selectedEmployee.cargo_puesto || "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Email Corporativo</h4>
+                <p className="text-sm font-medium">{selectedEmployee.email_corporativo || "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Teléfono Móvil</h4>
+                <p className="text-sm font-medium">{selectedEmployee.telefono_movil || "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Fecha de Ingreso</h4>
+                <p className="text-sm font-medium">{selectedEmployee.fecha_ingreso ? new Date(selectedEmployee.fecha_ingreso).toLocaleDateString() : "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Salario Base</h4>
+                <p className="text-sm font-medium">${parseFloat(selectedEmployee.salario_base_usd || 0).toFixed(2)}</p>
+              </div>
+              <div className="col-span-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">Supervisor Directo</h4>
+                <p className="text-sm font-medium">{selectedEmployee.supervisor_directo || "N/A"}</p>
               </div>
             </div>
           )}
@@ -467,7 +641,7 @@ export default function RRHHPage() {
 
       {/* Modal de Editar Empleado */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Editar Empleado</DialogTitle>
             <DialogDescription>
@@ -475,50 +649,60 @@ export default function RRHHPage() {
             </DialogDescription>
           </DialogHeader>
           {selectedEmployee && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Nombre Completo</label>
-                  <input type="text" defaultValue={selectedEmployee.name} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Correo Electrónico</label>
-                  <input type="email" defaultValue={selectedEmployee.email} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                </div>
+            <div className="grid gap-4 py-4 grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Cédula</label>
+                <input type="text" value={formData.cedula} onChange={(e) => setFormData({...formData, cedula: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Cargo</label>
-                  <input type="text" defaultValue={selectedEmployee.role} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Departamento</label>
-                  <select defaultValue={selectedEmployee.department} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                    <option value="Ventas">Ventas</option>
-                    <option value="IT">IT</option>
-                    <option value="Finanzas">Finanzas</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Atención al Cliente">Atención al Cliente</option>
-                    <option value="RRHH">RRHH</option>
-                  </select>
-                </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Nombre Completo</label>
+                <input type="text" value={formData.nombre_completo} onChange={(e) => setFormData({...formData, nombre_completo: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Departamento</label>
+                <input type="text" value={formData.departamento} onChange={(e) => setFormData({...formData, departamento: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Cargo / Puesto</label>
+                <input type="text" value={formData.cargo_puesto} onChange={(e) => setFormData({...formData, cargo_puesto: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Email Corporativo</label>
+                <input type="email" value={formData.email_corporativo} onChange={(e) => setFormData({...formData, email_corporativo: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Teléfono Móvil</label>
+                <input type="text" value={formData.telefono_movil} onChange={(e) => setFormData({...formData, telefono_movil: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Fecha de Ingreso</label>
+                <input type="date" value={formData.fecha_ingreso} onChange={(e) => setFormData({...formData, fecha_ingreso: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Salario Base (USD)</label>
+                <input type="number" step="0.01" value={formData.salario_base_usd} onChange={(e) => setFormData({...formData, salario_base_usd: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Supervisor Directo</label>
+                <input type="text" value={formData.supervisor_directo} onChange={(e) => setFormData({...formData, supervisor_directo: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-muted-foreground">Estado</label>
-                <select defaultValue={selectedEmployee.status} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                  <option value="activo">Activo</option>
-                  <option value="vacaciones">Vacaciones</option>
-                  <option value="licencia">Licencia Médica</option>
+                <select value={formData.estatus} onChange={(e) => setFormData({...formData, estatus: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                  <option value="Activo">Activo</option>
+                  <option value="Vacaciones">Vacaciones</option>
+                  <option value="Licencia">Licencia</option>
+                  <option value="Inactivo">Inactivo</option>
                 </select>
               </div>
             </div>
           )}
           <DialogFooter>
-            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
+            <button disabled={submitting} className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
               Cancelar
             </button>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsEditOpen(false)}>
-              Guardar Cambios
+            <button disabled={submitting} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={handleUpdate}>
+              {submitting ? "Guardando..." : "Guardar Cambios"}
             </button>
           </DialogFooter>
         </DialogContent>
