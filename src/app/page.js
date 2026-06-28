@@ -15,8 +15,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", remember: false });
-  const supabase=createClient();
-  const router =useRouter();
+  const [view, setView] = useState("login"); // "login" | "forgot" | "check-email"
+  const supabase = createClient();
+  const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,6 +40,23 @@ export default function LoginPage() {
     router.push("/dashboard");
   };
 
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(form.email, {
+      redirectTo: `${window.location.origin}/update-password`,
+    });
+
+    if (error) {
+      alert("Error al enviar correo: " + error.message);
+      setLoading(false);
+      return;
+    }
+
+    setView("check-email");
+    setLoading(false);
+  };
 
   return (
     <div className="min-h-screen flex dark">
@@ -137,124 +155,148 @@ export default function LoginPage() {
 
           {/* Header */}
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-foreground">Bienvenido de vuelta</h2>
+            <h2 className="text-2xl font-bold text-foreground">
+              {view === "login" ? "Bienvenido de vuelta" : view === "forgot" ? "Recuperar contraseña" : "Revisa tu correo"}
+            </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Ingresa tus credenciales para acceder al sistema
+              {view === "login"
+                ? "Ingresa tus credenciales para acceder al sistema"
+                : view === "forgot"
+                ? "Ingresa tu correo para recibir un enlace de recuperación"
+                : `Hemos enviado un enlace a ${form.email}`}
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            <div className="space-y-1.5">
-              <label htmlFor="email" className="text-sm font-medium text-foreground">
-                Correo electrónico
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="admin@empresa.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none ring-offset-background transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
+          {view === "check-email" ? (
+            <div className="space-y-5">
+              <button
+                onClick={() => setView("login")}
+                className="group relative w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-500 active:scale-[0.98] transition-all duration-150"
+              >
+                Volver al inicio de sesión
+              </button>
             </div>
-
-            {/* Password */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="text-sm font-medium text-foreground">
-                  Contraseña
+          ) : (
+            <form onSubmit={view === "login" ? handleSubmit : handleResetPassword} className="space-y-5">
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="text-sm font-medium text-foreground">
+                  Correo electrónico
                 </label>
-                <a
-                  href="#"
-                  className="text-xs text-blue-500 hover:text-blue-400 font-medium transition-colors"
-                >
-                  ¿Olvidaste tu contraseña?
-                </a>
-              </div>
-              <div className="relative">
                 <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
+                  id="email"
+                  type="email"
                   required
-                  autoComplete="current-password"
-                  placeholder="••••••••••••"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="w-full rounded-lg border border-border bg-background px-4 py-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground outline-none ring-offset-background transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  autoComplete="email"
+                  placeholder="admin@empresa.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none ring-offset-background transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 />
+              </div>
+
+              {/* Password (Only for login) */}
+              {view === "login" && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="password" className="text-sm font-medium text-foreground">
+                      Contraseña
+                    </label>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setView("forgot"); }}
+                      className="text-xs text-blue-500 hover:text-blue-400 font-medium transition-colors"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      required
+                      autoComplete="current-password"
+                      placeholder="••••••••••••"
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      className="w-full rounded-lg border border-border bg-background px-4 py-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground outline-none ring-offset-background transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Remember me (Only for login) */}
+              {view === "login" && (
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div className="relative">
+                    <input
+                      id="remember"
+                      type="checkbox"
+                      checked={form.remember}
+                      onChange={(e) => setForm({ ...form, remember: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="h-5 w-5 rounded border border-border bg-background peer-checked:border-blue-500 peer-checked:bg-blue-500 transition-all flex items-center justify-center">
+                      {form.remember && (
+                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">Mantener sesión iniciada</span>
+                </label>
+              )}
+
+              {/* Submit button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="group relative w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-500 active:scale-[0.98] transition-all duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    {view === "login" ? "Iniciando sesión..." : "Enviando enlace..."}
+                  </>
+                ) : (
+                  <>
+                    {view === "login" ? "Iniciar sesión" : "Enviar enlace de recuperación"}
+                    <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
+              
+              {/* Back to login (only on forgot view) */}
+              {view === "forgot" && (
                 <button
                   type="button"
-                  onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setView("login")}
+                  className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  Volver al inicio de sesión
                 </button>
-              </div>
-            </div>
-
-            {/* Remember me */}
-            <label className="flex items-center gap-3 cursor-pointer select-none">
-              <div className="relative">
-                <input
-                  id="remember"
-                  type="checkbox"
-                  checked={form.remember}
-                  onChange={(e) => setForm({ ...form, remember: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="h-5 w-5 rounded border border-border bg-background peer-checked:border-blue-500 peer-checked:bg-blue-500 transition-all flex items-center justify-center">
-                  {form.remember && (
-                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-              </div>
-              <span className="text-sm text-muted-foreground">Mantener sesión iniciada</span>
-            </label>
-
-            {/* Submit button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-500 active:scale-[0.98] transition-all duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                  </svg>
-                  Iniciando sesión...
-                </>
-              ) : (
-                <>
-                  Iniciar sesión
-                  <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-                </>
               )}
-            </button>
-          </form>
+            </form>
+          )}
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-background px-3 text-xs text-muted-foreground">o continúa con</span>
-            </div>
-          </div>
           {/* Footer note */}
           <p className="mt-8 text-center text-xs text-muted-foreground">
             ¿No tienes cuenta?{" "}
-            <a href="#" className="text-blue-500 hover:text-blue-400 font-medium transition-colors">
+            <span className="text-blue-500 hover:text-blue-400 font-medium transition-colors">
               Contacta a tu administrador
-            </a>
+            </span>
           </p>
 
           <p className="mt-6 text-center text-[11px] text-muted-foreground/50">

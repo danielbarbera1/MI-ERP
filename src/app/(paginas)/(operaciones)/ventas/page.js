@@ -4,7 +4,6 @@ import ERPLayout from "@/components/erp/ERPLayout";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -27,7 +26,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
   TrendingUp,
   DollarSign,
@@ -38,114 +38,10 @@ import {
   MoreHorizontal,
   Plus,
   Filter,
-  Download,
   Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-
-// Mock Data
-const kpiData = [
-  {
-    id: "ingresos-totales",
-    title: "Ingresos Totales",
-    value: "$45,231.89",
-    change: "+20.1%",
-    trend: "up",
-    icon: DollarSign,
-    description: "vs. mes anterior",
-    color: "text-emerald-500",
-    bg: "bg-emerald-500/10",
-  },
-  {
-    id: "ventas",
-    title: "Ventas Realizadas",
-    value: "+2350",
-    change: "+15%",
-    trend: "up",
-    icon: ShoppingCart,
-    description: "vs. mes anterior",
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-  },
-  {
-    id: "ticket-promedio",
-    title: "Ticket Promedio",
-    value: "$124.50",
-    change: "-2%",
-    trend: "down",
-    icon: CreditCard,
-    description: "vs. mes anterior",
-    color: "text-orange-500",
-    bg: "bg-orange-500/10",
-  },
-  {
-    id: "conversion",
-    title: "Tasa de Conversión",
-    value: "3.2%",
-    change: "+1.2%",
-    trend: "up",
-    icon: TrendingUp,
-    description: "vs. mes anterior",
-    color: "text-purple-500",
-    bg: "bg-purple-500/10",
-  },
-];
-
-const salesData = [
-  {
-    id: "VNT-7234",
-    customer: "Acme Corp",
-    email: "contacto@acme.com",
-    date: "2026-06-15",
-    amount: "$1,250.00",
-    status: "completado",
-    method: "Tarjeta de Crédito",
-  },
-  {
-    id: "VNT-7235",
-    customer: "Global Tech",
-    email: "ventas@globaltech.com",
-    date: "2026-06-15",
-    amount: "$850.00",
-    status: "procesando",
-    method: "Transferencia",
-  },
-  {
-    id: "VNT-7236",
-    customer: "María García",
-    email: "maria.g@email.com",
-    date: "2026-06-14",
-    amount: "$120.50",
-    status: "completado",
-    method: "PayPal",
-  },
-  {
-    id: "VNT-7237",
-    customer: "Industrias Stark",
-    email: "compras@stark.com",
-    date: "2026-06-14",
-    amount: "$5,400.00",
-    status: "pendiente",
-    method: "Transferencia",
-  },
-  {
-    id: "VNT-7238",
-    customer: "Juan Pérez",
-    email: "juanp@email.com",
-    date: "2026-06-13",
-    amount: "$45.00",
-    status: "completado",
-    method: "Tarjeta de Débito",
-  },
-  {
-    id: "VNT-7239",
-    customer: "Wayne Enterprises",
-    email: "billing@wayne.com",
-    date: "2026-06-13",
-    amount: "$12,000.00",
-    status: "cancelado",
-    method: "Transferencia",
-  },
-];
 
 const statusConfig = {
   completado: {
@@ -167,10 +63,63 @@ const statusConfig = {
 };
 
 export default function VentasPage() {
+  const supabase = createClient();
+  const [salesData, setSalesData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("date-desc");
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus, sortBy]);
+
+  const initialFormState = {
+    codigo_tx: "",
+    fecha_hora: new Date().toISOString().slice(0, 16),
+    tipo_transaccion: "Venta",
+    entidad_tercero: "",
+    operador_vendedor: "",
+    monto_usd: "",
+    estatus: "completado",
+    metodo_pago: "Transferencia",
+    concepto_detallado: "",
+  };
+  const [formData, setFormData] = useState(initialFormState);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchSales();
+  }, []);
+
+  const fetchSales = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("transacciones")
+      .select("*")
+      .order("fecha_hora", { ascending: false });
+      
+    if (error) {
+      console.error("Error fetching ventas:", error);
+    } else {
+      setSalesData(data || []);
+    }
+    setLoading(false);
+  };
+
+  const handleOpenAdd = () => {
+    setFormData(initialFormState);
+    setIsAddOpen(true);
+  };
 
   const handleOpenView = (sale) => {
     setSelectedSale(sale);
@@ -179,12 +128,57 @@ export default function VentasPage() {
 
   const handleOpenEdit = (sale) => {
     setSelectedSale(sale);
+    setFormData({
+      codigo_tx: sale.codigo_tx || "",
+      fecha_hora: sale.fecha_hora ? new Date(sale.fecha_hora).toISOString().slice(0, 16) : "",
+      tipo_transaccion: sale.tipo_transaccion || "Venta",
+      entidad_tercero: sale.entidad_tercero || "",
+      operador_vendedor: sale.operador_vendedor || "",
+      monto_usd: sale.monto_usd || "",
+      estatus: sale.estatus || "completado",
+      metodo_pago: sale.metodo_pago || "Transferencia",
+      concepto_detallado: sale.concepto_detallado || "",
+    });
     setIsEditOpen(true);
   };
-  
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("date-desc");
-  const [filterStatus, setFilterStatus] = useState("all");
+
+  const handleSave = async () => {
+    setSubmitting(true);
+    const { error } = await supabase.from("transacciones").insert([formData]);
+    if (error) {
+      alert("Error al guardar: " + error.message);
+    } else {
+      setIsAddOpen(false);
+      fetchSales();
+    }
+    setSubmitting(false);
+  };
+
+  const handleUpdate = async () => {
+    setSubmitting(true);
+    const { error } = await supabase
+      .from("transacciones")
+      .update(formData)
+      .eq("id", selectedSale.id);
+    if (error) {
+      alert("Error al actualizar: " + error.message);
+    } else {
+      setIsEditOpen(false);
+      fetchSales();
+    }
+    setSubmitting(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (confirm("¿Estás seguro de que deseas eliminar esta venta?")) {
+      const { error } = await supabase.from("transacciones").delete().eq("id", id);
+      if (error) {
+        alert("Error al eliminar: " + error.message);
+      } else {
+        fetchSales();
+      }
+    }
+  };
 
   const filteredAndSortedData = useMemo(() => {
     let data = [...salesData];
@@ -193,32 +187,142 @@ export default function VentasPage() {
       const lowerSearch = searchTerm.toLowerCase();
       data = data.filter(
         (sale) =>
-          sale.customer.toLowerCase().includes(lowerSearch) ||
-          sale.id.toLowerCase().includes(lowerSearch)
+          (sale.entidad_tercero && sale.entidad_tercero.toLowerCase().includes(lowerSearch)) ||
+          (sale.codigo_tx && sale.codigo_tx.toLowerCase().includes(lowerSearch))
       );
     }
 
     if (filterStatus !== "all") {
-      data = data.filter((sale) => sale.status === filterStatus);
+      data = data.filter((sale) => sale.estatus === filterStatus);
     }
 
     data.sort((a, b) => {
-      if (sortBy === "date-desc") return new Date(b.date) - new Date(a.date);
-      if (sortBy === "date-asc") return new Date(a.date) - new Date(b.date);
+      if (sortBy === "date-desc") return new Date(b.fecha_hora) - new Date(a.fecha_hora);
+      if (sortBy === "date-asc") return new Date(a.fecha_hora) - new Date(b.fecha_hora);
       
-      const priceA = parseFloat(a.amount.replace(/[^0-9.-]+/g,""));
-      const priceB = parseFloat(b.amount.replace(/[^0-9.-]+/g,""));
+      const priceA = parseFloat(a.monto_usd) || 0;
+      const priceB = parseFloat(b.monto_usd) || 0;
       if (sortBy === "amount-desc") return priceB - priceA;
       if (sortBy === "amount-asc") return priceA - priceB;
 
-      if (sortBy === "name-asc") return a.customer.localeCompare(b.customer);
-      if (sortBy === "name-desc") return b.customer.localeCompare(a.customer);
+      if (sortBy === "name-asc") return (a.entidad_tercero || "").localeCompare(b.entidad_tercero || "");
+      if (sortBy === "name-desc") return (b.entidad_tercero || "").localeCompare(a.entidad_tercero || "");
 
       return 0;
     });
 
     return data;
-  }, [searchTerm, sortBy, filterStatus]);
+  }, [salesData, searchTerm, sortBy, filterStatus]);
+
+  const totalItems = filteredAndSortedData.length;
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedData.slice(start, start + itemsPerPage);
+  }, [filteredAndSortedData, currentPage, itemsPerPage]);
+
+  const kpiData = useMemo(() => {
+    const completadas = salesData.filter(sale => sale.estatus === "completado" || sale.estatus === "Completado");
+    
+    // Totales de todos los tiempos
+    const ingresosTotales = completadas.reduce((sum, sale) => sum + (parseFloat(sale.monto_usd) || 0), 0);
+    const ventasRealizadas = completadas.length;
+    const ticketPromedio = ventasRealizadas > 0 ? ingresosTotales / ventasRealizadas : 0;
+    const pendientes = salesData.filter(sale => sale.estatus === "pendiente" || sale.estatus === "Pendiente").length;
+
+    // Calculo para "change" (mes actual vs mes anterior)
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    const currentMonthSales = completadas.filter(sale => {
+      if (!sale.fecha_hora) return false;
+      const date = new Date(sale.fecha_hora);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
+    const prevMonthSales = completadas.filter(sale => {
+      if (!sale.fecha_hora) return false;
+      const date = new Date(sale.fecha_hora);
+      return date.getMonth() === prevMonth && date.getFullYear() === prevYear;
+    });
+
+    const currIngresos = currentMonthSales.reduce((sum, sale) => sum + (parseFloat(sale.monto_usd) || 0), 0);
+    const prevIngresos = prevMonthSales.reduce((sum, sale) => sum + (parseFloat(sale.monto_usd) || 0), 0);
+    const ingresosChange = prevIngresos === 0 ? (currIngresos > 0 ? 100 : 0) : ((currIngresos - prevIngresos) / prevIngresos) * 100;
+
+    const currVentas = currentMonthSales.length;
+    const prevVentas = prevMonthSales.length;
+    const ventasChange = prevVentas === 0 ? (currVentas > 0 ? 100 : 0) : ((currVentas - prevVentas) / prevVentas) * 100;
+
+    const currTicket = currVentas > 0 ? currIngresos / currVentas : 0;
+    const prevTicket = prevVentas > 0 ? prevIngresos / prevVentas : 0;
+    const ticketChange = prevTicket === 0 ? (currTicket > 0 ? 100 : 0) : ((currTicket - prevTicket) / prevTicket) * 100;
+
+    const pendientesActual = salesData.filter(sale => {
+      if (!sale.fecha_hora) return false;
+      const date = new Date(sale.fecha_hora);
+      return (sale.estatus === "pendiente" || sale.estatus === "Pendiente") && date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    }).length;
+    const pendientesPrev = salesData.filter(sale => {
+      if (!sale.fecha_hora) return false;
+      const date = new Date(sale.fecha_hora);
+      return (sale.estatus === "pendiente" || sale.estatus === "Pendiente") && date.getMonth() === prevMonth && date.getFullYear() === prevYear;
+    }).length;
+    const pendientesChange = pendientesPrev === 0 ? (pendientesActual > 0 ? 100 : 0) : ((pendientesActual - pendientesPrev) / pendientesPrev) * 100;
+
+    const formatChange = (val) => {
+      if (!isFinite(val)) return "0%";
+      return `${val > 0 ? '+' : ''}${val.toFixed(1)}%`;
+    };
+
+    return [
+      {
+        id: "ingresos-totales",
+        title: "Ingresos Totales",
+        value: `$${ingresosTotales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        change: formatChange(ingresosChange),
+        trend: ingresosChange >= 0 ? "up" : "down",
+        icon: DollarSign,
+        description: "vs. mes anterior",
+        color: "text-emerald-500",
+        bg: "bg-emerald-500/10",
+      },
+      {
+        id: "ventas",
+        title: "Ventas Realizadas",
+        value: ventasRealizadas.toString(),
+        change: formatChange(ventasChange),
+        trend: ventasChange >= 0 ? "up" : "down",
+        icon: ShoppingCart,
+        description: "vs. mes anterior",
+        color: "text-blue-500",
+        bg: "bg-blue-500/10",
+      },
+      {
+        id: "ticket-promedio",
+        title: "Ticket Promedio",
+        value: `$${ticketPromedio.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        change: formatChange(ticketChange),
+        trend: ticketChange >= 0 ? "up" : "down",
+        icon: CreditCard,
+        description: "vs. mes anterior",
+        color: "text-orange-500",
+        bg: "bg-orange-500/10",
+      },
+      {
+        id: "pendientes",
+        title: "Ventas Pendientes",
+        value: pendientes.toString(),
+        change: formatChange(pendientesChange),
+        trend: pendientesChange <= 0 ? "up" : "down", 
+        icon: TrendingUp,
+        description: "vs. mes anterior",
+        color: "text-purple-500",
+        bg: "bg-purple-500/10",
+      },
+    ];
+  }, [salesData]);
 
   return (
     <ERPLayout title="Ventas">
@@ -231,13 +335,9 @@ export default function VentasPage() {
             <p className="text-sm text-muted-foreground">Administra tus ventas, facturas y transacciones recientes.</p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors">
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Exportar</span>
-            </button>
             <button 
               className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background"
-              onClick={() => setIsAddOpen(true)}
+              onClick={handleOpenAdd}
             >
               <Plus className="h-4 w-4" />
               Nueva Venta
@@ -285,7 +385,7 @@ export default function VentasPage() {
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Buscar venta..."
+                    placeholder="Buscar código o cliente..."
                     className="w-full rounded-md border border-border bg-background pl-9 pr-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                   />
                 </div>
@@ -323,30 +423,40 @@ export default function VentasPage() {
             <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 text-muted-foreground sticky top-0">
                 <tr>
-                  <th className="px-6 py-3 font-semibold">ID Transacción</th>
-                  <th className="px-6 py-3 font-semibold">Cliente</th>
-                  <th className="px-6 py-3 font-semibold">Fecha</th>
-                  <th className="px-6 py-3 font-semibold">Monto</th>
+                  <th className="px-6 py-3 font-semibold">Código TX</th>
+                  <th className="px-6 py-3 font-semibold">Cliente / Entidad</th>
+                  <th className="px-6 py-3 font-semibold">Fecha y Hora</th>
+                  <th className="px-6 py-3 font-semibold">Monto (USD)</th>
                   <th className="px-6 py-3 font-semibold">Método</th>
                   <th className="px-6 py-3 font-semibold">Estado</th>
                   <th className="px-6 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredAndSortedData.map((sale) => {
-                  const status = statusConfig[sale.status];
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-muted-foreground">Cargando datos...</td>
+                  </tr>
+                ) : filteredAndSortedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-muted-foreground">No hay ventas registradas.</td>
+                  </tr>
+                ) : paginatedData.map((sale) => {
+                  const status = statusConfig[sale.estatus] || { label: sale.estatus, className: "bg-gray-500/15 text-gray-600" };
                   return (
                     <tr key={sale.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-medium">{sale.id}</td>
+                      <td className="px-6 py-4 font-mono text-xs font-medium">{sale.codigo_tx || "N/A"}</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{sale.customer}</span>
-                          <span className="text-xs text-muted-foreground">{sale.email}</span>
+                          <span className="font-medium text-foreground">{sale.entidad_tercero || "Desconocido"}</span>
+                          <span className="text-xs text-muted-foreground">{sale.tipo_transaccion}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground">{sale.date}</td>
-                      <td className="px-6 py-4 font-medium text-foreground">{sale.amount}</td>
-                      <td className="px-6 py-4 text-muted-foreground">{sale.method}</td>
+                      <td className="px-6 py-4 text-muted-foreground">
+                        {sale.fecha_hora ? new Date(sale.fecha_hora).toLocaleString() : "N/A"}
+                      </td>
+                      <td className="px-6 py-4 font-medium text-foreground">${parseFloat(sale.monto_usd || 0).toFixed(2)}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{sale.metodo_pago}</td>
                       <td className="px-6 py-4">
                         <Badge variant="outline" className={`text-xs ${status.className}`}>
                           {status.label}
@@ -363,7 +473,7 @@ export default function VentasPage() {
                             <DropdownMenuItem onClick={() => handleOpenView(sale)}>Ver detalles</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleOpenEdit(sale)}>Editar venta</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-600 focus:text-red-600 focus:bg-red-50">Eliminar</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDelete(sale.id)} className="text-red-600 focus:text-red-600 focus:bg-red-50">Eliminar</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
@@ -373,50 +483,98 @@ export default function VentasPage() {
               </tbody>
             </table>
           </CardContent>
+          {/* Paginación */}
+          <div className="flex items-center justify-between border-t border-border px-6 py-4 bg-background rounded-b-xl">
+            <div className="text-sm text-muted-foreground">
+              Mostrando página <span className="font-medium text-foreground">{currentPage}</span> de <span className="font-medium text-foreground">{Math.max(1, Math.ceil(totalItems / itemsPerPage))}</span>
+              {" "}(Total: {totalItems} registros)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => p + 1)}
+                disabled={currentPage >= Math.ceil(totalItems / itemsPerPage) || totalItems === 0}
+                className="flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Siguiente
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </Card>
       </div>
 
+      {/* Modal de Agregar */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Nueva Venta</DialogTitle>
             <DialogDescription>
               Registra una nueva transacción de venta.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 grid-cols-2">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Cliente</label>
-              <input type="text" placeholder="Ej. Juan Pérez" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <label className="text-sm font-medium text-muted-foreground">Código TX</label>
+              <input type="text" value={formData.codigo_tx} onChange={(e) => setFormData({...formData, codigo_tx: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Monto Total</label>
-              <input type="text" placeholder="Ej. $1,500.00" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <label className="text-sm font-medium text-muted-foreground">Fecha y Hora</label>
+              <input type="datetime-local" value={formData.fecha_hora} onChange={(e) => setFormData({...formData, fecha_hora: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Método de Pago</label>
-                <select className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                  <option>Tarjeta de Crédito</option>
-                  <option>Transferencia</option>
-                  <option>Efectivo</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Estado</label>
-                <select className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                  <option>Completado</option>
-                  <option>Pendiente</option>
-                </select>
-              </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Cliente (Tercero)</label>
+              <input type="text" value={formData.entidad_tercero} onChange={(e) => setFormData({...formData, entidad_tercero: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Vendedor (Operador)</label>
+              <input type="text" value={formData.operador_vendedor} onChange={(e) => setFormData({...formData, operador_vendedor: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Monto (USD)</label>
+              <input type="number" step="0.01" value={formData.monto_usd} onChange={(e) => setFormData({...formData, monto_usd: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Tipo de Transacción</label>
+              <input type="text" value={formData.tipo_transaccion} onChange={(e) => setFormData({...formData, tipo_transaccion: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Método de Pago</label>
+              <select value={formData.metodo_pago} onChange={(e) => setFormData({...formData, metodo_pago: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Efectivo">Efectivo</option>
+                <option value="PayPal">PayPal</option>
+                <option value="Tarjeta de Débito">Tarjeta de Débito</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Estado</label>
+              <select value={formData.estatus} onChange={(e) => setFormData({...formData, estatus: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                <option value="completado">Completado</option>
+                <option value="procesando">Procesando</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-2 col-span-2">
+              <label className="text-sm font-medium text-muted-foreground">Concepto Detallado</label>
+              <textarea value={formData.concepto_detallado} onChange={(e) => setFormData({...formData, concepto_detallado: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none" rows="3" />
             </div>
           </div>
           <DialogFooter>
-            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
+            <button disabled={submitting} className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsAddOpen(false)}>
               Cancelar
             </button>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsAddOpen(false)}>
-              Registrar Venta
+            <button disabled={submitting} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={handleSave}>
+              {submitting ? "Guardando..." : "Registrar Venta"}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -424,47 +582,56 @@ export default function VentasPage() {
 
       {/* Modal de Ver Detalles */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Detalles de la Venta</DialogTitle>
+            <DialogTitle>Detalles de la Transacción</DialogTitle>
             <DialogDescription>
               Información completa de la venta seleccionada.
             </DialogDescription>
           </DialogHeader>
           {selectedSale && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">ID Transacción</h4>
-                  <p className="text-sm font-medium">{selectedSale.id}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Estado</h4>
-                  <Badge variant="outline" className={`mt-1 text-xs ${statusConfig[selectedSale.status]?.className}`}>
-                    {statusConfig[selectedSale.status]?.label}
-                  </Badge>
-                </div>
+            <div className="grid gap-4 py-4 grid-cols-2">
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">ID Interno</h4>
+                <p className="text-sm font-medium">{selectedSale.id}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Cliente</h4>
-                  <p className="text-sm font-medium">{selectedSale.customer}</p>
-                  <p className="text-xs text-muted-foreground">{selectedSale.email}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Monto Total</h4>
-                  <p className="text-sm font-medium">{selectedSale.amount}</p>
-                </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Código TX</h4>
+                <p className="text-sm font-medium">{selectedSale.codigo_tx || "N/A"}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Fecha</h4>
-                  <p className="text-sm font-medium">{selectedSale.date}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground">Método de Pago</h4>
-                  <p className="text-sm font-medium">{selectedSale.method}</p>
-                </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Estado</h4>
+                <Badge variant="outline" className={`mt-1 text-xs ${statusConfig[selectedSale.estatus]?.className || "bg-gray-100 text-gray-800"}`}>
+                  {statusConfig[selectedSale.estatus]?.label || selectedSale.estatus}
+                </Badge>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Fecha y Hora</h4>
+                <p className="text-sm font-medium">{selectedSale.fecha_hora ? new Date(selectedSale.fecha_hora).toLocaleString() : "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Cliente (Tercero)</h4>
+                <p className="text-sm font-medium">{selectedSale.entidad_tercero}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Vendedor (Operador)</h4>
+                <p className="text-sm font-medium">{selectedSale.operador_vendedor || "N/A"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Monto Total</h4>
+                <p className="text-sm font-medium">${parseFloat(selectedSale.monto_usd || 0).toFixed(2)}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Método de Pago</h4>
+                <p className="text-sm font-medium">{selectedSale.metodo_pago}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-muted-foreground">Tipo de Transacción</h4>
+                <p className="text-sm font-medium">{selectedSale.tipo_transaccion}</p>
+              </div>
+              <div className="col-span-2">
+                <h4 className="text-sm font-semibold text-muted-foreground">Concepto</h4>
+                <p className="text-sm font-medium whitespace-pre-wrap">{selectedSale.concepto_detallado || "Sin concepto"}</p>
               </div>
             </div>
           )}
@@ -478,52 +645,68 @@ export default function VentasPage() {
 
       {/* Modal de Editar Venta */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Editar Venta</DialogTitle>
             <DialogDescription>
               Modifica la información de esta transacción.
             </DialogDescription>
           </DialogHeader>
-          {selectedSale && (
-            <div className="grid gap-4 py-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Cliente</label>
-                <input type="text" defaultValue={selectedSale.customer} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Monto Total</label>
-                <input type="text" defaultValue={selectedSale.amount} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Método de Pago</label>
-                  <select defaultValue={selectedSale.method} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                    <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
-                    <option value="Transferencia">Transferencia</option>
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="PayPal">PayPal</option>
-                    <option value="Tarjeta de Débito">Tarjeta de Débito</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-muted-foreground">Estado</label>
-                  <select defaultValue={selectedSale.status} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
-                    <option value="completado">Completado</option>
-                    <option value="procesando">Procesando</option>
-                    <option value="pendiente">Pendiente</option>
-                    <option value="cancelado">Cancelado</option>
-                  </select>
-                </div>
-              </div>
+          <div className="grid gap-4 py-4 grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Código TX</label>
+              <input type="text" value={formData.codigo_tx} onChange={(e) => setFormData({...formData, codigo_tx: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
-          )}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Fecha y Hora</label>
+              <input type="datetime-local" value={formData.fecha_hora} onChange={(e) => setFormData({...formData, fecha_hora: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Cliente (Tercero)</label>
+              <input type="text" value={formData.entidad_tercero} onChange={(e) => setFormData({...formData, entidad_tercero: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Vendedor (Operador)</label>
+              <input type="text" value={formData.operador_vendedor} onChange={(e) => setFormData({...formData, operador_vendedor: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Monto (USD)</label>
+              <input type="number" step="0.01" value={formData.monto_usd} onChange={(e) => setFormData({...formData, monto_usd: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Tipo de Transacción</label>
+              <input type="text" value={formData.tipo_transaccion} onChange={(e) => setFormData({...formData, tipo_transaccion: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Método de Pago</label>
+              <select value={formData.metodo_pago} onChange={(e) => setFormData({...formData, metodo_pago: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Efectivo">Efectivo</option>
+                <option value="PayPal">PayPal</option>
+                <option value="Tarjeta de Débito">Tarjeta de Débito</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Estado</label>
+              <select value={formData.estatus} onChange={(e) => setFormData({...formData, estatus: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                <option value="completado">Completado</option>
+                <option value="procesando">Procesando</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-2 col-span-2">
+              <label className="text-sm font-medium text-muted-foreground">Concepto Detallado</label>
+              <textarea value={formData.concepto_detallado} onChange={(e) => setFormData({...formData, concepto_detallado: e.target.value})} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none" rows="3" />
+            </div>
+          </div>
           <DialogFooter>
-            <button className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
+            <button disabled={submitting} className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20" onClick={() => setIsEditOpen(false)}>
               Cancelar
             </button>
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={() => setIsEditOpen(false)}>
-              Guardar Cambios
+            <button disabled={submitting} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-background" onClick={handleUpdate}>
+              {submitting ? "Guardando..." : "Guardar Cambios"}
             </button>
           </DialogFooter>
         </DialogContent>
